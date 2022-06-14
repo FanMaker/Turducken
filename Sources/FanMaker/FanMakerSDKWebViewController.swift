@@ -11,12 +11,12 @@ import WebKit
 import SwiftUI
 
 @available(iOS 13.0, *)
-public class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
+open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
     public var fanmaker : FanMakerSDKWebView? = nil
     private let locationManager : CLLocationManager = CLLocationManager()
     private let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
     
-    public override func viewDidLoad() {
+    open override func viewDidLoad() {
         super.viewDidLoad()
         
         let userController : WKUserContentController = WKUserContentController()

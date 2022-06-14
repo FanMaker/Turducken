@@ -13,3 +13,9 @@ public protocol FanMakerSDKHttpResponse : Decodable {
     var message : String { get }
     var data : FanMakerSDKHttpResponseData { get }
 }
+
+public struct FanMakerSDKPostResponse : FanMakerSDKHttpResponse {
+    public let status : Int
+    public let message : String
+    public let data : String
+}

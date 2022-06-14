@@ -10,9 +10,12 @@ import Foundation
 public struct FanMakerSDKHttpError : LocalizedError {
     public enum ErrorCode : Int {
         case badUrl
+        case badHttpMethod
+        case badData
         case success = 200
         case forbidden = 401
         case notFound = 404
+        case serverError = 500
         case emptyResponse
         case badResponse
         case unknown

@@ -24,7 +24,7 @@ let package = Package(
         .target(
             name: "FanMaker",
             dependencies: [],
-            sources: ["FanMakerSDK.swift", "FanMakerSDKWebView.swift", "FanMakerSDKLocationDelegate.swift", "FanMakerSDKWebViewController.swift", "Http", "Http/Resources"],
+            sources: ["FanMakerSDK.swift", "FanMakerSDKWebView.swift", "FanMakerSDKLocationDelegate.swift", "FanMakerSDKWebViewController.swift", "FanMakerSDKBeaconsManager.swift", "FanMakerSDKBeaconsManagerDelegate.swift", "Http", "Http/Responses"],
             resources: [
                 .process("Resources")
             ]

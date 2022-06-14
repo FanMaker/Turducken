@@ -1,8 +1,8 @@
 import Foundation
 import SwiftUI
 
-let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
-let FanMakerSDKJSONIdentifiers : String = "FanMakerSDKJSONIdentifiers"
+public let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
+public let FanMakerSDKJSONIdentifiers : String = "FanMakerSDKJSONIdentifiers"
 
 public class FanMakerSDK {
     public static var apiKey : String = ""
