@@ -134,7 +134,7 @@ FanMakerSDK.setLoadingForegroundImage(_ fgImage : UIImage)
 
 **Note**: `FanMakerSDK.setLoadingForegroundImage(_ fgImage : UIImage)` can take both a static or an animated `UIImage` as an argument.
 
-### Passing Custom Identifiers
+### Passing predetermined Identifiers
 
 FanMaker UI usually requires users to input their FanMaker's Credentials. However, you can make use of up to four different custom identifiers to allow a given user to automatically login when they first open FanMaker UI.
 
@@ -182,7 +182,8 @@ FanMakerSDK.ticketmasterID
 FanMakerSDK.yinzid
 ```
 
-**Note**: It is also possible to pass arbitrary identifiers through the use of a dictionary. This would be done in the same place as you would pass a standard custom identifier above, so please reference that section for more details.
+### Passing Custom Identifiers 
+It is also possible to pass arbitrary identifiers through the use of a dictionary. This would be done in the same place as you would pass a standard custom identifier above, so please reference that section for more details.
 
 ```
 ...
