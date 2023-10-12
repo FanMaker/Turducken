@@ -216,7 +216,8 @@ FanMakerSDK.ticketmasterID
 FanMakerSDK.yinzid
 ```
 
-**Note**: It is also possible to pass arbitrary identifiers through the use of a dictionary. This would be done in the same place as you would pass a standard custom identifier above, so please reference that section for more details.
+### Passing Custom Identifiers 
+It is also possible to pass arbitrary identifiers through the use of a dictionary. This would be done in the same place as you would pass a standard custom identifier above, so please reference that section for more details.
 
 ```
 ...
