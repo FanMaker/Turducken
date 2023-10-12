@@ -134,6 +134,40 @@ FanMakerSDK.setLoadingForegroundImage(_ fgImage : UIImage)
 
 **Note**: `FanMakerSDK.setLoadingForegroundImage(_ fgImage : UIImage)` can take both a static or an animated `UIImage` as an argument.
 
+The Sample App has a working example commented out in the `RegionList.swift` file, but here are some instructions to aid in creating a custom loading animation.
+
+**Note** Your images should be **square in dimension**, otherwise the SDK will force the dimensions into a square, potentially distoring your animation.
+
+You will need to break your gif into a PNG sequence, a still image for each "frame" of the animation. Once you have this sequence import all PNGs to the `Assets.xcassets` catalog of your iOS application.
+
+Then you will need some code to create the animation from your static PNGS:
+```
+var images: [UIImage] = []
+
+// Start your sequence at 0 and end with the number of images you have.
+for index in 0...89 {
+    // We expect the images to be in the Assets.xcassets catelog. Number your images like so: `<YOUR IMAGE NAME>-0`
+    if let image = UIImage(named: "<YOUR IMAGE NAME>-\(index)") {
+        images.append(image)
+    }
+}
+
+// Use `compactMap` to filter out any nil values from the array
+let nonNilImages = images.compactMap { $0 }
+
+// Check if there are any images before creating the animated image
+if !nonNilImages.isEmpty {
+    // You can adjust the duration to speed up or slow down your animation
+    let gifImage = UIImage.animatedImage(with: nonNilImages, duration: 1.0)
+
+    // Unwrap the optional before passing it to FanMakerSDK
+    if let unwrappedGifImage = gifImage {
+        // If all has gone well, we can now pass the animated image to FanMakerSDK
+        FanMakerSDK.setLoadingForegroundImage(unwrappedGifImage)
+    }
+}
+```
+
 ### Passing Custom Identifiers
 
 FanMaker UI usually requires users to input their FanMaker's Credentials. However, you can make use of up to four different custom identifiers to allow a given user to automatically login when they first open FanMaker UI.
@@ -144,7 +178,7 @@ import FanMaker
 
 struct ContentView : View {
     @State private var isShowingFanMakerUI : Bool = false
-    
+
     var body : some View {
         // FanMakerUI initialization
         let fanMakerUI = FanMakerSDKWebViewController()
