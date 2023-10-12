@@ -140,6 +140,8 @@ The Sample App has a working example commented out in the `RegionList.swift` fil
 
 You will need to break your gif into a PNG sequence, a still image for each "frame" of the animation. Once you have this sequence import all PNGs to the `Assets.xcassets` catalog of your iOS application.
 
+<img width="1160" alt="Screenshot 2023-10-12 at 4 51 37 PM" src="https://github.com/FanMaker/Turducken/assets/3985921/e121b16e-63f2-4a40-9109-eefd3aa83dab">
+
 Then you will need some code to create the animation from your static PNGS:
 ```
 var images: [UIImage] = []
