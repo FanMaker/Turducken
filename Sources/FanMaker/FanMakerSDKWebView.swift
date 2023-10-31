@@ -70,7 +70,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         request.setValue(jsonString, forHTTPHeaderField: "X-Fanmaker-Identifiers")
 
         // SDK Exclusive Token
-        request.setValue("1.2.2", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("1.2.3", forHTTPHeaderField: "X-FanMaker-SDK-Version")
 
         self.webView.load(request)
     }

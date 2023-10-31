@@ -195,7 +195,12 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
             try postRegionAction(region_identifier: region.identifier, action: "enter") { delegate, fmRegion in
                 delegate.beaconsManager(self, didEnterRegion: fmRegion)
                 self.log("Start ranging beacons for FanMaker Region \(fmRegion)")
-                manager.startRangingBeacons(satisfying: fmRegion.constraint()!)
+
+                if let constraint = fmRegion.constraint() {
+                    manager.startRangingBeacons(satisfying: constraint)
+                } else {
+                    self.log("ERROR: Cannot start raging for FanMaker Region because constraint is nil. FanMaker Region: \(fmRegion)")
+                }
             }
         } catch {
             log("\(error)")
@@ -213,7 +218,12 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
             try postRegionAction(region_identifier: region.identifier, action: "exit") { delegate, fmRegion in
                 delegate.beaconsManager(self, didExitRegion: fmRegion)
                 self.log("Stop ranging beacons for FanMaker Region \(fmRegion)")
-                manager.stopRangingBeacons(satisfying: fmRegion.constraint()!)
+
+                if let constraint = fmRegion.constraint() {
+                    manager.stopRangingBeacons(satisfying: constraint)
+                } else {
+                    self.log("ERROR: Cannot stop ranging for FanMaker Region because constraint is nil. FanMaker Region: \(fmRegion)")
+                }
             }
         } catch {
             log("\(error)")
