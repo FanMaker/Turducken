@@ -274,6 +274,7 @@ Button("Show FanMaker UI", action: {
 ...
 
 ```
+*`Note`: a value of `true` indicates that the user has opted in to a privacy permission, `false` indicates that a user has opted out.*
 
 ### Location Tracking
 
