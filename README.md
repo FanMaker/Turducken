@@ -1,4 +1,4 @@
-# FanMaker Swift SDK for iOS App Development 
+# FanMaker Swift SDK for iOS App Development
 
 ## About
 
@@ -38,7 +38,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         // FANMAKER SDK INITIALIZATION CODE
         FanMakerSDK.initialize(apiKey: "<SDK_KEY>")
-  
+
         . . .
 
         return true
@@ -88,7 +88,7 @@ import SwiftUI
 struct MyApp: App {
     // Include your AppDelegate class here
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -109,7 +109,7 @@ import FanMaker
 
 struct ContentView : View {
     @State private var isShowingFanMakerUI : Bool = false
-    
+
     var body : some View {
         Button("Show FanMaker UI", action: { isShowingFanMakerUI = true })
             .sheet(isPresented: $isShowingFanMakerUI) {
@@ -125,7 +125,7 @@ struct ContentView : View {
 
 When you present the `FanMakerSDKWebViewController` instance it will take a couple of seconds to load the content to display to the user. In the meanwhile, a white screen with a loading animation will show to indicate the user the UI is actually loading.
 
-You can personalize both the loading screen's background color and loading animation by calling the following methods before presenting the `FanMakerSDKWebViewController`. The prefered place to call these functions is right after calling `FanMakerSDK.initialize` 
+You can personalize both the loading screen's background color and loading animation by calling the following methods before presenting the `FanMakerSDKWebViewController`. The prefered place to call these functions is right after calling `FanMakerSDK.initialize`
 
 ```
 FanMakerSDK.setLoadingBackgroundColor(_ bgColor : UIColor)
@@ -170,7 +170,7 @@ if !nonNilImages.isEmpty {
 }
 ```
 
-### Passing Custom Identifiers
+### Passing Identifiers
 
 FanMaker UI usually requires users to input their FanMaker's Credentials. However, you can make use of up to four different custom identifiers to allow a given user to automatically login when they first open FanMaker UI.
 
@@ -218,7 +218,7 @@ FanMakerSDK.ticketmasterID
 FanMakerSDK.yinzid
 ```
 
-### Passing Custom Identifiers 
+### Passing Custom Identifiers
 It is also possible to pass arbitrary identifiers through the use of a dictionary. This would be done in the same place as you would pass a standard custom identifier above, so please reference that section for more details.
 
 ```
@@ -228,7 +228,43 @@ Button("Show FanMaker UI", action: {
     FanMakerSDK.setMemberID("<memberid>")
 
     let arbitraryIdentifiers: [String: Any] = [
+        "nfl_oidc": "1234-nfl-oidc"
+    ]
+
+    FanMakerSDK.setFanMakerIdentifiers(dictionary: arbitraryIdentifiers)
+
+    ...
+})
+...
+
+```
+
+### Privacy Permissions (Optional)
+It is possible to pass optional privacy permission details to the FanMaker SDK where we will record the settings for the user in our system. To pass this information to FanMaker, please use the following protocols. Note: it is the same way you would pass Custom Identifiers above, but with specific keys.
+
+The specific privacy opt in/out keys are as follows:
+1. `privacy_advertising`
+2. `privacy_analytics`
+3. `privacy_functional`
+4. `privacy_all`
+
+*NOTE: all privacy permissions are optional. Do not pass privacy settings that you do not have user data for*
+
+```
+...
+Button("Show FanMaker UI", action: {
+    ...
+    FanMakerSDK.setMemberID("<memberid>")
+
+    let arbitraryIdentifiers: [String: Any] = [
+        # This is an example of a Custom Identifer you may pass
         "nfl_oidc": "1234-nfl-oidc",
+
+        # These are the opt in/out settings
+        "privacy_advertising": false,
+        "privacy_analytics": true,
+        "privacy_functional": true,
+        "privacy_all": false,
     ]
 
     FanMakerSDK.setFanMakerIdentifiers(dictionary: arbitraryIdentifiers)
@@ -260,10 +296,10 @@ Then, you need to declare an instance of `FanMakerSDKBeaconsManager` and assign 
 ```
 class FanMakerViewModel : NSObject, FanMakerSDKBeaconsManagerDelegate {
     private let beaconsManager : FanMakerSDKBeaconsManager
-    
+
     init() {
         beaconsManager = FanMakerBeaconsManager()
-        
+
         super.init()
         beaconsManager.delegate = self
     }
@@ -296,7 +332,7 @@ In order to actually start tracking beacons, you need to call `beaconsManager.fe
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didEnterRegion region: FanMakerSDKBeaconRegion) -> Void
 ```
-This function will get called whenever a user walks into a scanned beacon region. 
+This function will get called whenever a user walks into a scanned beacon region.
 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didExitRegion region: FanMakerSDKBeaconRegion) -> Void
@@ -311,7 +347,7 @@ This function will get called whenever a user gets a valid beacon signal, which 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didUpdateBeaconRangeActionsSendList queue: [FanMakerSDKBeaconRangeAction]) -> Void
 ```
-This function will get called whenever a valid beacon signal fails to get posted to the FanMaker servers. This may happen because of weak or failing internet connection, temporarily server errors, etc. The SDK will retry to send this queue every minute and, once it get posted successfully, this queue will be emptied and this function will be called with an empty array.  
+This function will get called whenever a valid beacon signal fails to get posted to the FanMaker servers. This may happen because of weak or failing internet connection, temporarily server errors, etc. The SDK will retry to send this queue every minute and, once it get posted successfully, this queue will be emptied and this function will be called with an empty array.
 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didFailWithError error: FanMakerSDKBeaconsError) -> Void
@@ -330,7 +366,7 @@ Bluetooth (required for beacons)
 ```
 <key>NSBluetoothAlwaysUsageDescription</key>
 <string>Enabling blutooth access will allow you to earn points when you come in contact with bluetooth beacons that may be located at the location of an event you are attending. You may also receive exclusive offers and additional point earning opportunities based on your contact with bluetooth beacons always</string>
-	
+
 <key>NSBluetoothPeripheralUsageDescription</key>
 <string>Enabling blutooth access will allow you to earn points when you come in contact with bluetooth beacons that may be located at the location of an event you are attending. You may also receive exclusive offers and additional point earning opportunities based on your contact with bluetooth beacons</string>
 ```
