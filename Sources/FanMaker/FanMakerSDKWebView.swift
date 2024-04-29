@@ -8,14 +8,48 @@
 import Foundation
 import SwiftUI
 import WebKit
+// import FanMakerSDKCacheState
 
 @available(iOS 13.0, *)
+
+public final class FanMakerSDKCacheState {
+    public var cacheFilePath: URL {
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return documentsDirectory.appendingPathComponent("cachedResponses")
+    }
+
+    public var inMemoryCache: [String: CachedURLResponse] {
+        didSet {
+            if let cachedResponsesData = try? NSKeyedArchiver.archivedData(withRootObject: inMemoryCache, requiringSecureCoding: false) {
+                try? cachedResponsesData.write(to: cacheFilePath)
+            }
+        }
+    }
+
+    public init() {
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let cPath = documentsDirectory.appendingPathComponent("cachedResponses")
+        // Try to read the archived data from the file system
+        if let data = try? Data(contentsOf: cPath),
+           let unarchivedCache = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(data) as? [String: CachedURLResponse] {
+            self.inMemoryCache = unarchivedCache
+        } else {
+            self.inMemoryCache = [:]
+        }
+    }
+}
+
 public struct FanMakerSDKWebView : UIViewRepresentable {
     public var webView : WKWebView
+    // private var state: FanMakerSDKCacheState
+
+    private var state : FanMakerSDKCacheState = FanMakerSDKCacheState()
+
     private var urlString : String = ""
 
     public init(configuration: WKWebViewConfiguration) {
         self.webView = WKWebView(frame: .zero, configuration: configuration)
+        self.state = FanMakerSDKCacheState()
 
         let path = "site_details/info"
 
@@ -42,7 +76,45 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         self.urlString = urlString
     }
 
+    public func getCachedResponse(for request: URLRequest) -> CachedURLResponse? {
+        // print("------------------------------------------------------------------------------------ >>> CHECKING THE CACHE FOR DATA")
+        guard let cacheKey = request.url?.absoluteString else {
+            return nil
+        }
+
+        // print("------------------------------------------------------------------------------------ >>> CHECKED THE CACHE FOR DATA")
+        // print(cacheKey)
+        // print("----------------------------------")
+        // print(self.state.inMemoryCache[cacheKey])
+        // print("------------------------------------------------------------------------------------ <<< CHECKED THE CACHE FOR DATA")
+        return self.state.inMemoryCache[cacheKey]
+    }
+
+    public func fetchFreshContent(for request: URLRequest, completion: @escaping (Data) -> Void) {
+        // print("------------------------------------------------------------------------------------ >>> Fetching Fresh Content")
+        URLSession.shared.dataTask(with: request) { (data, response, error) in
+            guard let data = data, error == nil else {
+                // Handle the error
+                return
+            }
+
+            // print("------------------------------------------------------------------------------------ >>> FRESH DATA RECEIVED")
+            // print(data)
+            // print("----")
+            // print(request.url!.absoluteString)
+            // print("------------------------------------------------------------------------------------ <<< FRESH DATA RECEIVED")
+            // Process the fresh data as needed
+
+            // Update the cache in the shared state
+            self.state.inMemoryCache[request.url!.absoluteString] = CachedURLResponse(response: response!, data: data)
+
+            completion(data)
+        }.resume()
+    }
+
     public func prepareUIView() {
+        // print("------------------------------------------------------------------------------------ >>> 0 PREPAREING THE VIEW")
+
         let url : URL? = URL(string: self.urlString)
         var request : URLRequest = URLRequest(url: url!)
         let defaults : UserDefaults = UserDefaults.standard
@@ -70,9 +142,35 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         request.setValue(jsonString, forHTTPHeaderField: "X-Fanmaker-Identifiers")
 
         // SDK Exclusive Token
-        request.setValue("1.2.3", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("1.8.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
 
-        self.webView.load(request)
+        // if let cachedResponse = getCachedResponse(for: request) {
+        //     let mimeType = cachedResponse.response.mimeType ?? "application/octet-stream"
+        //     let encoding = cachedResponse.response.textEncodingName ?? "UTF-8"
+        //     var uurl = url ?? URL(string: "https://admin.fanmaker.com/500")!
+        //     self.webView.load(cachedResponse.data, mimeType: mimeType, characterEncodingName: encoding, baseURL: uurl)
+        // }
+
+        // print("------------------------------------------------------------------------------------ >>> REQUEST HEADERS")
+        if let allHeaders = request.allHTTPHeaderFields {
+            for (field, value) in allHeaders {
+                print("\(field): \(value)")
+            }
+        }
+        // print("------------------------------------------------------------------------------------ <<< REQUEST HEADERS")
+
+        fetchFreshContent(for: request) { freshData in
+            let urlString = url?.absoluteString ?? "https://admin.fanmaker.com/500"
+            guard let uurl = URL(string: urlString) else {
+                print("Error: URL string is invalid.")
+                return
+            }
+
+            // Load the data into the webView
+            DispatchQueue.main.async {
+                self.webView.load(freshData, mimeType: "application/octet-stream", characterEncodingName: "UTF-8", baseURL: uurl)
+            }
+        }
     }
 
     public func makeUIView(context: Context) -> some UIView {
