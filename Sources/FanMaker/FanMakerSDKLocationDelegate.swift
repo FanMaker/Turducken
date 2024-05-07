@@ -1,6 +1,6 @@
 //
 //  File.swift
-//  
+//
 //
 //  Created by Érik Escobedo on 31/05/21.
 //
@@ -11,23 +11,23 @@ import CoreLocation
 class FanMakerSDKLocationDelegate : NSObject, CLLocationManagerDelegate {
     public var lat : CLLocationDegrees
     public var lng : CLLocationDegrees
-    
+
     override init() {
         self.lat = 0
         self.lng = 0
     }
-    
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let location = locations.first {
             self.lat = location.coordinate.latitude
             self.lng = location.coordinate.longitude
         }
     }
-    
+
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print(error)
     }
-    
+
     public func coords() -> String {
         return "{\"lat\":\(self.lat), \"lng\":\(self.lng)}"
     }
