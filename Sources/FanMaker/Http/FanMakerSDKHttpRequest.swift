@@ -8,11 +8,13 @@
 import Foundation
 
 public struct FanMakerSDKHttpRequest {
+    let sdk: FanMakerSDK
     public static let host : String = "https://api.fanmaker.com/api/v2"
     public let urlString : String
     private var request : URLRequest? = nil
 
-    init(path: String) {
+    init(sdk: FanMakerSDK, path: String) {
+        self.sdk = sdk
         self.urlString = "\(FanMakerSDKHttpRequest.host)/\(path)"
 
         if let url = URL(string: urlString) {
@@ -32,17 +34,17 @@ public struct FanMakerSDKHttpRequest {
             switch method {
             case "GET":
                 request.httpMethod = "GET"
-                request.setValue(FanMakerSDK.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
+                request.setValue(self.sdk.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
             case "POST":
                 request.httpMethod = "POST"
                 request.httpBody = try JSONSerialization.data(withJSONObject: body, options: .prettyPrinted)
                 request.setValue("application/json", forHTTPHeaderField: "Accept")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 let defaults = UserDefaults.standard
-                if let userToken = defaults.string(forKey: FanMakerSDKSessionToken) {
+                if let userToken = defaults.string(forKey: self.sdk.FanMakerSDKSessionToken) {
                     request.setValue(userToken, forHTTPHeaderField: "X-FanMaker-Token")
                 } else {
-                    request.setValue(FanMakerSDK.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
+                    request.setValue(self.sdk.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
                 }
             default:
                 onCompletion(.failure(FanMakerSDKHttpError(code: .badHttpMethod, message: method)))

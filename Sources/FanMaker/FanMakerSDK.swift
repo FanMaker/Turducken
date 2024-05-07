@@ -3,32 +3,33 @@ import SwiftUI
 import WebKit
 import CoreLocation
 
-public let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
-public let FanMakerSDKJSONIdentifiers : String = "FanMakerSDKJSONIdentifiers"
-
 public class FanMakerSDK {
-    public static var apiKey : String = ""
-    public static var userID : String = ""
-    public static var memberID : String = ""
-    public static var studentID : String = ""
-    public static var ticketmasterID : String = ""
-    public static var yinzid : String = ""
-    public static var pushToken : String = ""
-    public static var fanmakerIdentifierLexicon: [String: Any] = [:]
-    public static var locationEnabled : Bool = false
-    public static var loadingBackgroundColor : UIColor = UIColor.white
-    public static var loadingForegroundImage : UIImage? = nil
+    public var apiKey : String = ""
+    public var userID : String = ""
+    public var memberID : String = ""
+    public var studentID : String = ""
+    public var ticketmasterID : String = ""
+    public var yinzid : String = ""
+    public var pushToken : String = ""
+    public var fanmakerIdentifierLexicon: [String: Any] = [:]
+    public var locationEnabled : Bool = false
+    public var loadingBackgroundColor : UIColor = UIColor.white
+    public var loadingForegroundImage : UIImage? = nil
 
-    public static var deepLinkPath: String?
-    public static var baseURL : String?
-    public static var currentWebView : WKWebView? = nil
+    public let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
+    public let FanMakerSDKJSONIdentifiers : String = "FanMakerSDKJSONIdentifiers"
 
-    public static var beaconUniquenessThrottle : Int = 60
-    private static let locationManager : CLLocationManager = CLLocationManager()
-    private static let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
+    public var deepLinkPath: String?
+    public var baseURL : String?
+    public var currentWebView : WKWebView? = nil
+
+    public var beaconUniquenessThrottle : Int = 60
+    private let locationManager : CLLocationManager = CLLocationManager()
+    private let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
+
 
     // Used for "Deep Linking"
-    public static func handleUrl(_ url: URL) -> Bool {
+    public func handleUrl(_ url: URL) -> Bool {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: true)
 
         guard let host = components?.host, let path = components?.path else {
@@ -51,7 +52,7 @@ public class FanMakerSDK {
     }
 
     // Used for "Deep Linking"
-    public static func canHandleUrl(_ url: URL) -> Bool {
+    public func canHandleUrl(_ url: URL) -> Bool {
         // Parse the URL and check if it can be handled.
         let components = URLComponents(url: url, resolvingAgainstBaseURL: true)
 
@@ -68,14 +69,16 @@ public class FanMakerSDK {
         return false
     }
 
-    public static func initialize(apiKey : String) {
+    public init() {}
+
+    public func initialize(apiKey : String) {
         self.apiKey = apiKey
         self.locationEnabled = false
 
         let defaults : UserDefaults = UserDefaults.standard
-        if defaults.string(forKey: FanMakerSDKSessionToken) != nil {
-            if let json = defaults.string(forKey: FanMakerSDKJSONIdentifiers) {
-                FanMakerSDK.setIdentifiers(fromJSON: json)
+        if defaults.string(forKey: self.FanMakerSDKSessionToken) != nil {
+            if let json = defaults.string(forKey: self.FanMakerSDKJSONIdentifiers) {
+                self.setIdentifiers(fromJSON: json)
             }
 
             NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -83,14 +86,14 @@ public class FanMakerSDK {
     }
 
     // Put anything in there that you want to happen when the app enters the foreground
-    @objc private static func appWillEnterForeground() {
+    @objc private func appWillEnterForeground() {
         if locationEnabled {
             locationManager.delegate = locationDelegate
             self.sendLocationPing()
         }
     }
 
-    public static func sendLocationPing() {
+    public func sendLocationPing() {
         print("GPS Coordinates: \(locationDelegate.checkAuthorizationAndReturnCoordinates(locationManager))")
         let coords = locationDelegate.checkAuthorizationAndReturnCoordinates(locationManager)
 
@@ -106,35 +109,35 @@ public class FanMakerSDK {
         }
     }
 
-    public static func isInitialized() -> Bool {
+    public func isInitialized() -> Bool {
         return apiKey != ""
     }
 
-    public static func setUserID(_ value : String) {
+    public func setUserID(_ value : String) {
         self.userID = value
     }
 
-    public static func setMemberID(_ value : String) {
+    public func setMemberID(_ value : String) {
         self.memberID = value
     }
 
-    public static func setStudentID(_ value : String) {
+    public func setStudentID(_ value : String) {
         self.studentID = value
     }
 
-    public static func setTicketmasterID(_ value : String) {
+    public func setTicketmasterID(_ value : String) {
         self.ticketmasterID = value
     }
 
-    public static func setYinzid(_ value : String) {
+    public func setYinzid(_ value : String) {
         self.yinzid = value
     }
 
-    public static func setPushNotificationToken(_ value : String) {
+    public func setPushNotificationToken(_ value : String) {
         self.pushToken = value
     }
 
-    public static func setFanMakerIdentifiers(dictionary: [String: Any] = [:]) -> [String: Any] {
+    public func setFanMakerIdentifiers(dictionary: [String: Any] = [:]) -> [String: Any] {
         var idLexicon = (self.fanmakerIdentifierLexicon as? [String: Any]) ?? [:]
 
         for key in dictionary.keys {
@@ -146,24 +149,24 @@ public class FanMakerSDK {
         return self.fanmakerIdentifierLexicon as? [String: Any] ?? [:]
     }
 
-    public static func enableLocationTracking() {
+    public func enableLocationTracking() {
         self.locationEnabled = true
     }
 
-    public static func disableLocationTracking() {
+    public func disableLocationTracking() {
         self.locationEnabled = false
     }
 
-    public static func setLoadingBackgroundColor(_ bgColor : UIColor) {
+    public func setLoadingBackgroundColor(_ bgColor : UIColor) {
         self.loadingBackgroundColor = bgColor
     }
 
-    public static func setLoadingForegroundImage(_ fgImage : UIImage) {
+    public func setLoadingForegroundImage(_ fgImage : UIImage) {
         self.loadingForegroundImage = fgImage
     }
 
 
-    public static func sdkOpenUrl(scheme : String) {
+    public func sdkOpenUrl(scheme : String) {
         if let url = URL(string: scheme) {
             if #available(iOS 10, *) {
                 UIApplication.shared.open(url, options: [:],
@@ -178,17 +181,17 @@ public class FanMakerSDK {
         }
     }
 
-    public static func setIdentifiers(fromJSON json : String) {
+    public func setIdentifiers(fromJSON json : String) {
         let data : Data? = json.data(using: .utf8)
         do {
             let identifiers = try JSONDecoder().decode(FanMakerSDKIdentifiers.self, from: data!)
-            if identifiers.user_id != nil { FanMakerSDK.setUserID(identifiers.user_id!) }
-            if identifiers.member_id != nil { FanMakerSDK.setMemberID(identifiers.member_id!) }
-            if identifiers.student_id != nil { FanMakerSDK.setStudentID(identifiers.student_id!) }
-            if identifiers.ticketmaster_id != nil { FanMakerSDK.setTicketmasterID(identifiers.ticketmaster_id!) }
-            if identifiers.yinzid != nil { FanMakerSDK.setYinzid(identifiers.yinzid!) }
-            if identifiers.push_token != nil { FanMakerSDK.setPushNotificationToken(identifiers.push_token!) }
-            if identifiers.fanmaker_identifiers != nil { FanMakerSDK.setFanMakerIdentifiers(dictionary: identifiers.fanmaker_identifiers!) }
+            if identifiers.user_id != nil { self.setUserID(identifiers.user_id!) }
+            if identifiers.member_id != nil { self.setMemberID(identifiers.member_id!) }
+            if identifiers.student_id != nil { self.setStudentID(identifiers.student_id!) }
+            if identifiers.ticketmaster_id != nil { self.setTicketmasterID(identifiers.ticketmaster_id!) }
+            if identifiers.yinzid != nil { self.setYinzid(identifiers.yinzid!) }
+            if identifiers.push_token != nil { self.setPushNotificationToken(identifiers.push_token!) }
+            if identifiers.fanmaker_identifiers != nil { self.setFanMakerIdentifiers(dictionary: identifiers.fanmaker_identifiers!) }
         } catch { }
     }
 }

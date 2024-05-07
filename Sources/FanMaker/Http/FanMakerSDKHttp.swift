@@ -8,15 +8,15 @@
 import Foundation
 
 public struct FanMakerSDKHttp {
-    public static func get<HttpResponse : FanMakerSDKHttpResponse>(path: String, model: HttpResponse.Type, onCompletion: @escaping (Result<HttpResponse, FanMakerSDKHttpError>) -> Void) {
+    public static func get<HttpResponse : FanMakerSDKHttpResponse>(sdk: FanMakerSDK, path: String, model: HttpResponse.Type, onCompletion: @escaping (Result<HttpResponse, FanMakerSDKHttpError>) -> Void) {
 
-        let request = FanMakerSDKHttpRequest(path: path)
+        let request = FanMakerSDKHttpRequest(sdk: sdk, path: path)
         request.request(method: "GET", body: [:], model: model.self, onCompletion: onCompletion)
     }
 
-    public static func post(path: String, body: Any, onCompletion: @escaping (Result<FanMakerSDKPostResponse, FanMakerSDKHttpError>) -> Void) {
+    public static func post(sdk: FanMakerSDK, path: String, body: Any, onCompletion: @escaping (Result<FanMakerSDKPostResponse, FanMakerSDKHttpError>) -> Void) {
 
-        let request = FanMakerSDKHttpRequest(path: path)
+        let request = FanMakerSDKHttpRequest(sdk: sdk, path: path)
         request.request(method: "POST", body: body, model: FanMakerSDKPostResponse.self, onCompletion: onCompletion)
     }
 }
