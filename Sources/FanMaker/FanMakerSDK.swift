@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import CoreLocation
 
 public class FanMakerSDK {
     public let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
@@ -21,6 +22,9 @@ public class FanMakerSDK {
 
     public init() {}
 
+    private let locationManager : CLLocationManager = CLLocationManager()
+    private let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
+
     public func initialize(apiKey : String) {
         self.apiKey = apiKey
         self.locationEnabled = false
@@ -31,6 +35,9 @@ public class FanMakerSDK {
                 self.setIdentifiers(fromJSON: json)
             }
         }
+
+        locationManager.delegate = locationDelegate
+        self.sendLocationPing()
     }
 
     public func isInitialized() -> Bool {
@@ -79,6 +86,10 @@ public class FanMakerSDK {
 
     public func disableLocationTracking() {
         self.locationEnabled = false
+    }
+
+    public func sendLocationPing() {
+        print("GPS Coordinates: \(locationDelegate.checkAuthorizationAndReturnCoordinates(locationManager))")
     }
 
     public func setLoadingBackgroundColor(_ bgColor : UIColor) {

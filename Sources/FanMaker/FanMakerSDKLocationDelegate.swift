@@ -17,11 +17,57 @@ class FanMakerSDKLocationDelegate : NSObject, CLLocationManagerDelegate {
         self.lng = 0
     }
 
+    // func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    //     var authorizationStatus : CLAuthorizationStatus
+    //     if #available(iOS 14.0, *) {
+    //         authorizationStatus = manager.authorizationStatus
+    //     } else {
+    //         authorizationStatus = CLLocationManager.authorizationStatus()
+    //     }
+    //     switch authorizationStatus {
+    //     case .authorizedAlways, .authorizedWhenInUse:
+    //         print("Authorization granted.")
+    //     case .denied, .restricted:
+    //         print("Authorization denied or restricted.")
+    //     case .notDetermined:
+    //         print("Authorization not determined.")
+    //     @unknown default:
+    //         print("Unknown authorization status.")
+    //     }
+    // }
+
+    func checkAuthorizationAndReturnCoordinates(_ manager: CLLocationManager) -> Any {
+        var authorizationStatus: CLAuthorizationStatus
+        if #available(iOS 14.0, *) {
+            authorizationStatus = manager.authorizationStatus
+        } else {
+            authorizationStatus = CLLocationManager.authorizationStatus()
+        }
+
+        switch authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            if let location = manager.location {
+                let lat = location.coordinate.latitude
+                let lng = location.coordinate.longitude
+                return ["lat": lat, "lng": lng]
+            } else {
+                return false
+            }
+        case .denied, .restricted:
+            return false
+        case .notDetermined:
+            return false
+        @unknown default:
+            return false
+        }
+    }
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let location = locations.first {
             self.lat = location.coordinate.latitude
             self.lng = location.coordinate.longitude
         }
+        print("Location updated. \(self.lat), \(self.lng)")
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
