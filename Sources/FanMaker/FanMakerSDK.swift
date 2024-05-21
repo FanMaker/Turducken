@@ -71,6 +71,9 @@ public class FanMakerSDK {
 
     public init() {}
 
+    private let locationManager : CLLocationManager = CLLocationManager()
+    private let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
+
     public func initialize(apiKey : String) {
         self.apiKey = apiKey
         self.locationEnabled = false
@@ -107,6 +110,9 @@ public class FanMakerSDK {
 
             FanMakerSDKHttp.post(path: "events/auto_checkin", body: body) { result in }
         }
+
+        locationManager.delegate = locationDelegate
+        self.sendLocationPing()
     }
 
     public func isInitialized() -> Bool {
@@ -155,6 +161,10 @@ public class FanMakerSDK {
 
     public func disableLocationTracking() {
         self.locationEnabled = false
+    }
+
+    public func sendLocationPing() {
+        print("GPS Coordinates: \(locationDelegate.checkAuthorizationAndReturnCoordinates(locationManager))")
     }
 
     public func setLoadingBackgroundColor(_ bgColor : UIColor) {

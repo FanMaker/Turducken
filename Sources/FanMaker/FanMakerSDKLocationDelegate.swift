@@ -48,6 +48,7 @@ class FanMakerSDKLocationDelegate : NSObject, CLLocationManagerDelegate {
             self.lat = location.coordinate.latitude
             self.lng = location.coordinate.longitude
         }
+        print("Location updated. \(self.lat), \(self.lng)")
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
