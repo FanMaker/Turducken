@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import WebKit
 
 public let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
 public let FanMakerSDKJSONIdentifiers : String = "FanMakerSDKJSONIdentifiers"
@@ -17,7 +18,52 @@ public class FanMakerSDK {
     public static var loadingBackgroundColor : UIColor = UIColor.white
     public static var loadingForegroundImage : UIImage? = nil
 
+    public static var deepLinkPath: String?
+    public static var baseURL : String?
+    public static var currentWebView : WKWebView? = nil
+
     public static var beaconUniquenessThrottle : Int = 60
+
+    // Used for "Deep Linking"
+    public static func handleUrl(_ url: URL) -> Bool {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: true)
+
+        guard let host = components?.host, let path = components?.path else {
+            return false
+        }
+
+        if host.lowercased() == "fanmaker" {
+            self.deepLinkPath = path
+            if((self.currentWebView != nil) && (self.baseURL != nil)) {
+                let fullUrl = (self.baseURL ?? String("")) + path
+                let url = URL(string: fullUrl)!
+                let request = URLRequest(url: url)
+                self.currentWebView?.load(request)
+            }
+
+            return true
+        }
+
+        return false
+    }
+
+    // Used for "Deep Linking"
+    public static func canHandleUrl(_ url: URL) -> Bool {
+        // Parse the URL and check if it can be handled.
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: true)
+
+        guard let host = components?.host else {
+            return false
+        }
+
+        // we only accept links that are tailored for the SDK
+        // like: clientapp://fanmaker/...
+        if host.lowercased() == "fanmaker"{
+            return true
+        }
+
+        return false
+    }
 
     public static func initialize(apiKey : String) {
         self.apiKey = apiKey

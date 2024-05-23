@@ -170,6 +170,67 @@ if !nonNilImages.isEmpty {
 }
 ```
 
+### Deep Linking / Universal Links
+If you wish to link to something within the FanMaker SDK, you need to setup your application to accept URL Scheme or Universal Links, or know the resource you are trying to access.
+
+An example of using a URL scheme to open app links:
+
+Navigate to your project's Info tab in Xcode and scroll down to URL Types and hit the (+) button. From there add the bundle identifier for your application (which can be located in the Signing & Capabilities tab), and add the URL Schemes you wish to use. No other setting should be necessary.
+
+From the example, you'll be able to open your application with your URL Scheme, like `turducken://open`
+
+Next you'll need to modify your application to be able to handle the link:
+
+```
+import SwiftUI
+import FanMaker
+
+struct ContentView : View {
+    @State private var isShowingFanMakerUI : Bool = false
+
+    var body : some View {
+        Button("Show FanMaker UI", action: { isShowingFanMakerUI = true })
+        .sheet(isPresented: $isShowingFanMakerUI) {
+            // FanMakerUI Display
+            FanMakerSDKWebViewControllerRepresentable()
+            Button("Hide FanMakerUI", action: { isShowingFanMakerUI = false })
+        }
+        .onOpenURL { url in
+            if FanMakerSDK.canHandleUrl(url) {
+                if FanMakerSDK.handleUrl(url) {
+                    print("FanMaker handled the URL, opening the FanMaker UI")
+                    self.isShowingFanMakerUI = true
+                } else {
+                    print("FanMaker failed to handle the URL")
+                }
+
+            } else {
+                print("FanMaker cannot handle the URL")
+            }
+        }
+    }
+}
+```
+
+In the example above the `.onOpenURL` method is used to catch the URL used to open the application and so it can be handeled accordingly. The FanMaker SDK provides 2 methods for determining if a link can be handeled by FanMaker:
+1) `FanMakerSDK.canHandleUrl(<URL>)`
+2) `FanMakerSDK.handleUrl(<URL>)`
+
+**NOTE**: the `FanMakerSDK` expects links to start with `FanMaker` (case insensitive) after the schema used to open the applicaiton. Like so:
+```
+turducken://FanMaker/...(rest of path)
+```
+
+So a link that might be used to open the prize store to a specific prize might look like this:
+```
+turducken://FanMaker/store/items/1234
+```
+
+The `FanMakerSDK.canHandleUrl(<URL>)` determines if the url can be used by the FanMaker SDK, enforcing the `FanMaker` (case insensitive) prefix in the requested URL. Which will return a `Bool`
+The `FanMakerSDK.handleUrl(<URL>)` will setup the necessary connections within the `FanMakerSDK` so that when the WebView is next viewed, it will navigate to the appropriate place.
+
+**Note**: it is recommended that you trigger your sheet to display the `FanMakerUI` after a link has been handeled. On subsequent loads of the webview, the standard path will be used instead. FanMaker can help you format your links to sections of the SDK approprately.
+
 ### Passing Identifiers
 
 FanMaker UI usually requires users to input their FanMaker's Credentials. However, you can make use of up to four different custom identifiers to allow a given user to automatically login when they first open FanMaker UI.

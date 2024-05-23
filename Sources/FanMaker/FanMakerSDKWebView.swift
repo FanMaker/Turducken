@@ -16,6 +16,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
 
     public init(configuration: WKWebViewConfiguration) {
         self.webView = WKWebView(frame: .zero, configuration: configuration)
+        FanMakerSDK.currentWebView = self.webView
 
         let path = "site_details/info"
 
@@ -26,6 +27,12 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
                 switch(result) {
                 case .success(let response):
                     urlString = response.data.sdk_url
+                    FanMakerSDK.baseURL = urlString
+                    if var deepLinkPath = FanMakerSDK.deepLinkPath, !deepLinkPath.isEmpty {
+                        urlString += deepLinkPath
+                        FanMakerSDK.deepLinkPath = nil
+                    }
+
                     if let beaconUniquenessThrottle = Int(response.data.site_features.beacons.beaconUniquenessThrottle) {
                         FanMakerSDK.beaconUniquenessThrottle = beaconUniquenessThrottle
                     }
