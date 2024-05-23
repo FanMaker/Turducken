@@ -175,6 +175,8 @@ If you wish to link to something within the FanMaker SDK, you need to setup your
 
 An example of using a URL scheme to open app links:
 
+<img width="1424" alt="Screenshot 2024-05-23 at 3 42 02 PM" src="https://github.com/FanMaker/Turducken/assets/3985921/071cecb0-7c32-4f5e-b2f5-669be6c62249">
+
 Navigate to your project's Info tab in Xcode and scroll down to URL Types and hit the (+) button. From there add the bundle identifier for your application (which can be located in the Signing & Capabilities tab), and add the URL Schemes you wish to use. No other setting should be necessary.
 
 From the example, you'll be able to open your application with your URL Scheme, like `turducken://open`
