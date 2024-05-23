@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import CoreLocation
 
 public let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
 public let FanMakerSDKJSONIdentifiers : String = "FanMakerSDKJSONIdentifiers"
@@ -19,6 +20,9 @@ public class FanMakerSDK {
 
     public static var beaconUniquenessThrottle : Int = 60
 
+    private static let locationManager : CLLocationManager = CLLocationManager()
+    private static let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
+
     public static func initialize(apiKey : String) {
         self.apiKey = apiKey
         self.locationEnabled = false
@@ -28,6 +32,32 @@ public class FanMakerSDK {
             if let json = defaults.string(forKey: FanMakerSDKJSONIdentifiers) {
                 FanMakerSDK.setIdentifiers(fromJSON: json)
             }
+
+            NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        }
+    }
+
+    // Put anything in there that you want to happen when the app enters the foreground
+    @objc private static func appWillEnterForeground() {
+        if locationEnabled {
+            locationManager.delegate = locationDelegate
+            self.sendLocationPing()
+        }
+    }
+
+    public static func sendLocationPing() {
+        print("GPS Coordinates: \(locationDelegate.checkAuthorizationAndReturnCoordinates(locationManager))")
+        let coords = locationDelegate.checkAuthorizationAndReturnCoordinates(locationManager)
+
+        if let coords = coords as? [String: Any],
+        let lat = coords["lat"],
+        let lng = coords["lng"] {
+            let body: [String: Any] = [
+                "latitude": lat,
+                "longitude": lng
+            ]
+
+            FanMakerSDKHttp.post(path: "events/auto_checkin", body: body) { result in }
         }
     }
 
