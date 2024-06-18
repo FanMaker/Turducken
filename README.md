@@ -1,9 +1,11 @@
 # FanMaker Swift SDK for iOS App Development
 
-## :warning: WARNING, BREAKING CHANGES IN 2.0 :warning:
-Version 2.0 of the FanMakerSDK has changed from static to instanced based initializtion. This means that you will need to modify your implementation to avoid service interruptions in this version.
+## :warning: BREAKING CHANGES IN 2.0 :warning:
+Version 2.0 of the FanMakerSDK has changed from static to instanced based initializtion. This means that you will need to modify your implementation to avoid service interruptions in this version. Previous versions of the SDK are no longer available for instalation. Support for SDK versions 1.x will be depreciated on December 20th, 2024, afterwords non version 2.0 + will cease to function.
 
-## Upgrading from < 2.0
+The benefits of SDK 2.0 are [described in detail on our blog](https://blog.fanmaker.com/sdk-2-0-background-check-ins-app-rewards-and-support-for-multiple-programs/).
+
+## Upgrading to 2.0 from 1.x
 
 ### Step 1:
 Previously the FanMaker SDK was initialized like this:
