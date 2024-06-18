@@ -12,6 +12,17 @@ import SwiftUI
 
 @available(iOS 13.0, *)
 open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
+    let sdk: FanMakerSDK
+
+    init(sdk: FanMakerSDK) {
+        self.sdk = sdk
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required public init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     public var fanmaker : FanMakerSDKWebView? = nil
     private let locationManager : CLLocationManager = CLLocationManager()
     private let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
@@ -24,12 +35,12 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = userController
 
-        self.fanmaker = FanMakerSDKWebView(configuration: configuration)
+        self.fanmaker = FanMakerSDKWebView(sdk: self.sdk, configuration: configuration)
         self.fanmaker?.prepareUIView()
         self.fanmaker?.webView.navigationDelegate = self
 
         self.view = UIView(frame: self.view!.bounds)
-        self.view.backgroundColor = FanMakerSDK.loadingBackgroundColor
+        self.view.backgroundColor = self.sdk.loadingBackgroundColor
 
         let bounds = self.view!.bounds
         let x = bounds.width / 4
@@ -37,7 +48,7 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
 
         let loadingAnimation = UIImageView(frame: CGRect(x: x, y: y, width: 2 * x, height: 2 * x))
 
-        if let fgImage = FanMakerSDK.loadingForegroundImage {
+        if let fgImage = self.sdk.loadingForegroundImage {
             loadingAnimation.image = fgImage
         } else {
             var images : [UIImage] = []
@@ -60,23 +71,23 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
 
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "fanmaker", let body = message.body as? Dictionary<String, String> {
-            let defaults : UserDefaults = UserDefaults.standard
+            let defaults = self.sdk.userDefaults
 
             body.forEach { key, value in
                 switch(key) {
                 case "sdkOpenUrl":
-                    FanMakerSDK.sdkOpenUrl(scheme: value)
+                    self.sdk.sdkOpenUrl(scheme: value)
                 case "setToken":
-                    defaults.set(value, forKey: FanMakerSDKSessionToken)
+                    defaults?.set(value, forKey: self.sdk.FanMakerSDKSessionToken)
                 case "setIdentifiers":
-                    FanMakerSDK.setIdentifiers(fromJSON: value)
-                    defaults.set(value, forKey: FanMakerSDKJSONIdentifiers)
+                    self.sdk.setIdentifiers(fromJSON: value)
+                    defaults?.set(value, forKey: self.sdk.FanMakerSDKJSONIdentifiers)
                 case "requestLocationAuthorization":
                     locationManager.requestWhenInUseAuthorization()
                     locationManager.delegate = locationDelegate
                     locationManager.requestLocation()
                 case "updateLocation":
-                    if FanMakerSDK.locationEnabled && CLLocationManager.locationServicesEnabled() {
+                    if self.sdk.locationEnabled && CLLocationManager.locationServicesEnabled() {
                         var authorizationStatus : CLAuthorizationStatus
                         if #available(iOS 14.0, *) {
                             authorizationStatus = locationManager.authorizationStatus
@@ -106,10 +117,14 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
 
 @available(iOS 13.0, *)
 public struct FanMakerSDKWebViewControllerRepresentable : UIViewControllerRepresentable {
-    public init() {}
+    let sdk: FanMakerSDK
+
+    public init(sdk: FanMakerSDK) {
+        self.sdk = sdk
+    }
 
     public func makeUIViewController(context: Context) -> some UIViewController {
-        return FanMakerSDKWebViewController()
+        return FanMakerSDKWebViewController(sdk: sdk)
     }
 
     public func updateUIViewController(_ uiViewController: UIViewControllerType, context: Context) {

@@ -67,6 +67,7 @@ extension FanMakerSDKBeaconRangeAction {
 }
 
 open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
+    let sdk: FanMakerSDK
 
     weak open var delegate: FanMakerSDKBeaconsManagerDelegate?
     var locationManager : CLLocationManager
@@ -77,14 +78,16 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     private let FanMakerSDKBeaconRangeActionsSendList = "FanMakerSDKBeaconRangeActionsSendList"
     private var timer : Timer?
 
-    override public init() {
+    public init(sdk: FanMakerSDK) {
+        self.sdk = sdk
         self.locationManager = CLLocationManager()
         super.init()
         self.locationManager.delegate = self
     }
 
     private func getQueue(from key: String) -> [FanMakerSDKBeaconRangeAction] {
-        guard let data = UserDefaults.standard.data(forKey: key) else {
+        let defaults = self.sdk.userDefaults
+        guard let data = defaults?.data(forKey: key) else {
             return []
         }
         return (try? PropertyListDecoder().decode([FanMakerSDKBeaconRangeAction].self, from: data)) ?? []
@@ -99,20 +102,21 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     }
 
     open func requestAuthorization() {
-        locationManager.requestAlwaysAuthorization()
+        self.locationManager.requestAlwaysAuthorization()
+        var status = CLLocationManager.authorizationStatus()
     }
 
     open func fetchBeaconRegions() {
         guard isUserLogged() else { return fail(with: .userSessionNotFound) }
 
         DispatchQueue.global().async {
-            FanMakerSDKHttp.get(path: "site_details/info", model: FanMakerSDKSiteDetailsResponse.self) { result in
+            FanMakerSDKHttp.get(sdk: self.sdk, path: "site_details/sdk", model: FanMakerSDKInfoResponse.self) { result in
                 switch(result) {
                 case .success(let response):
-                    if let beaconUniquenessThrottle = Int(response.data.site_features.beacons.beaconUniquenessThrottle) {
-                        FanMakerSDK.beaconUniquenessThrottle = beaconUniquenessThrottle
+                    if let beaconUniquenessThrottle = Int(response.data.beacons.uniqueness_throttle) {
+                        self.sdk.beaconUniquenessThrottle = beaconUniquenessThrottle
                     }
-                    NSLog("FanMaker Info: Beacon Uniqueness Throttle settled to \(FanMakerSDK.beaconUniquenessThrottle) seconds")
+                    NSLog("FanMaker Info: Beacon Uniqueness Throttle settled to \(self.sdk.beaconUniquenessThrottle) seconds")
                 case .failure(let error):
                     print(error.localizedDescription)
                 }
@@ -120,7 +124,7 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
         }
 
         DispatchQueue.global().async {
-            FanMakerSDKHttp.get(path: "beacon_regions", model: FanMakerSDKBeaconRegionsResponse.self) { result in
+            FanMakerSDKHttp.get(sdk: self.sdk, path: "beacon_regions", model: FanMakerSDKBeaconRegionsResponse.self) { result in
                 switch(result) {
                 case .success(let response):
                     // self.cachedRegions = response.data
@@ -263,12 +267,12 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     }
 
     private func isUserLogged() -> Bool {
-        let defaults = UserDefaults.standard
+        let defaults = self.sdk.userDefaults
 
-        if let token = defaults.string(forKey: FanMakerSDKSessionToken) {
-          return token != ""
+        if let token = defaults?.string(forKey: self.sdk.FanMakerSDKSessionToken) {
+            return token != ""
         } else {
-          return false
+            return false
         }
     }
 
@@ -297,12 +301,12 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
             "action_type": action
         ]
 
-        FanMakerSDKHttp.post(path: "beacon_region_actions", body: body) { result in
+        FanMakerSDKHttp.post(sdk: self.sdk, path: "beacon_region_actions", body: body) { result in
             if let delegate = self.delegate {
                 switch(result) {
                 case .success:
                     onCompletion(delegate, fmRegion)
-                case .failure:
+                case .failure(let error):
                     delegate.beaconsManager(self, didFailWithError: .serverError)
                     self.log("Server error POSTing \(action.uppercased()) FanMaker Beacon")
                     self.log("UUID: \(fmRegion.uuid)")
@@ -328,7 +332,8 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     private func update(queueName: String, queueContent beacons: [FanMakerSDKBeaconRangeAction]) -> [FanMakerSDKBeaconRangeAction] {
         let beacons : [FanMakerSDKBeaconRangeAction] = beacons.suffix(1000)
         let encodedBeacons = try? PropertyListEncoder().encode(beacons.suffix(1000))
-        UserDefaults.standard.set(encodedBeacons, forKey: queueName)
+        let defaults = self.sdk.userDefaults
+        defaults?.set(encodedBeacons, forKey: queueName)
 
         return beacons
     }
@@ -338,7 +343,7 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
         if (queue.isEmpty) { return }
 
         let body : [String : [[String : String]]] = ["beacons" : queue.map { $0.toParams() }]
-        FanMakerSDKHttp.post(path: "beacon_range_actions", body: body) { result in
+        FanMakerSDKHttp.post(sdk: self.sdk, path: "beacon_range_actions", body: body) { result in
             switch(result) {
             case .success:
                 self.update(rangeActionsSendList: [])
@@ -357,6 +362,6 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
                 queueAction.minor == beaconRangeAction.minor
         }).last else { return true }
 
-        return Date().timeIntervalSince(lastAction.seenAt) >= Double(FanMakerSDK.beaconUniquenessThrottle)
+        return Date().timeIntervalSince(lastAction.seenAt) >= Double(self.sdk.beaconUniquenessThrottle)
     }
 }

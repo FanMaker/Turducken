@@ -8,11 +8,13 @@
 import Foundation
 
 public struct FanMakerSDKHttpRequest {
-    public static let host : String = "https://api.fanmaker.com/api/v2"
+    let sdk: FanMakerSDK
+    public static let host : String = "https://api3.fanmaker.com/api/v3"
     public let urlString : String
     private var request : URLRequest? = nil
 
-    init(path: String) {
+    init(sdk: FanMakerSDK, path: String) {
+        self.sdk = sdk
         self.urlString = "\(FanMakerSDKHttpRequest.host)/\(path)"
 
         if let url = URL(string: urlString) {
@@ -27,22 +29,27 @@ public struct FanMakerSDKHttpRequest {
             return
         }
 
-        request.setValue("1.8.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("2.0.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("sdk", forHTTPHeaderField: "X-FanMaker-Mode")
         do {
             switch method {
             case "GET":
                 request.httpMethod = "GET"
-                request.setValue(FanMakerSDK.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
+                request.setValue(self.sdk.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
+                request.setValue(self.sdk.apiKey, forHTTPHeaderField: "Authorization")
             case "POST":
                 request.httpMethod = "POST"
                 request.httpBody = try JSONSerialization.data(withJSONObject: body, options: .prettyPrinted)
                 request.setValue("application/json", forHTTPHeaderField: "Accept")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                let defaults = UserDefaults.standard
-                if let userToken = defaults.string(forKey: FanMakerSDKSessionToken) {
+
+                let defaults = self.sdk.userDefaults
+                if let userToken = defaults?.string(forKey: self.sdk.FanMakerSDKSessionToken) {
                     request.setValue(userToken, forHTTPHeaderField: "X-FanMaker-Token")
+                    request.setValue(userToken, forHTTPHeaderField: "Authorization")
                 } else {
-                    request.setValue(FanMakerSDK.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
+                    request.setValue(self.sdk.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
+                    request.setValue(self.sdk.apiKey, forHTTPHeaderField: "Authorization")
                 }
             default:
                 onCompletion(.failure(FanMakerSDKHttpError(code: .badHttpMethod, message: method)))
