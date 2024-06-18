@@ -86,7 +86,8 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     }
 
     private func getQueue(from key: String) -> [FanMakerSDKBeaconRangeAction] {
-        guard let data = UserDefaults.standard.data(forKey: key) else {
+        let defaults = self.sdk.userDefaults
+        guard let data = defaults?.data(forKey: key) else {
             return []
         }
         return (try? PropertyListDecoder().decode([FanMakerSDKBeaconRangeAction].self, from: data)) ?? []
@@ -101,17 +102,18 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     }
 
     open func requestAuthorization() {
-        locationManager.requestAlwaysAuthorization()
+        self.locationManager.requestAlwaysAuthorization()
+        var status = CLLocationManager.authorizationStatus()
     }
 
     open func fetchBeaconRegions() {
         guard isUserLogged() else { return fail(with: .userSessionNotFound) }
 
         DispatchQueue.global().async {
-            FanMakerSDKHttp.get(sdk: self.sdk, path: "site_details/info", model: FanMakerSDKSiteDetailsResponse.self) { result in
+            FanMakerSDKHttp.get(sdk: self.sdk, path: "site_details/sdk", model: FanMakerSDKInfoResponse.self) { result in
                 switch(result) {
                 case .success(let response):
-                    if let beaconUniquenessThrottle = Int(response.data.site_features.beacons.beaconUniquenessThrottle) {
+                    if let beaconUniquenessThrottle = Int(response.data.beacons.uniqueness_throttle) {
                         self.sdk.beaconUniquenessThrottle = beaconUniquenessThrottle
                     }
                     NSLog("FanMaker Info: Beacon Uniqueness Throttle settled to \(self.sdk.beaconUniquenessThrottle) seconds")
@@ -265,12 +267,12 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     }
 
     private func isUserLogged() -> Bool {
-        let defaults = UserDefaults.standard
+        let defaults = self.sdk.userDefaults
 
-        if let token = defaults.string(forKey: self.sdk.FanMakerSDKSessionToken) {
-          return token != ""
+        if let token = defaults?.string(forKey: self.sdk.FanMakerSDKSessionToken) {
+            return token != ""
         } else {
-          return false
+            return false
         }
     }
 
@@ -330,7 +332,8 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     private func update(queueName: String, queueContent beacons: [FanMakerSDKBeaconRangeAction]) -> [FanMakerSDKBeaconRangeAction] {
         let beacons : [FanMakerSDKBeaconRangeAction] = beacons.suffix(1000)
         let encodedBeacons = try? PropertyListEncoder().encode(beacons.suffix(1000))
-        UserDefaults.standard.set(encodedBeacons, forKey: queueName)
+        let defaults = self.sdk.userDefaults
+        defaults?.set(encodedBeacons, forKey: queueName)
 
         return beacons
     }

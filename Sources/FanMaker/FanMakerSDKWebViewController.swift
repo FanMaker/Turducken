@@ -71,17 +71,17 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
 
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "fanmaker", let body = message.body as? Dictionary<String, String> {
-            let defaults : UserDefaults = UserDefaults.standard
+            let defaults = self.sdk.userDefaults
 
             body.forEach { key, value in
                 switch(key) {
                 case "sdkOpenUrl":
                     self.sdk.sdkOpenUrl(scheme: value)
                 case "setToken":
-                    defaults.set(value, forKey: self.sdk.FanMakerSDKSessionToken)
+                    defaults?.set(value, forKey: self.sdk.FanMakerSDKSessionToken)
                 case "setIdentifiers":
                     self.sdk.setIdentifiers(fromJSON: value)
-                    defaults.set(value, forKey: self.sdk.FanMakerSDKJSONIdentifiers)
+                    defaults?.set(value, forKey: self.sdk.FanMakerSDKJSONIdentifiers)
                 case "requestLocationAuthorization":
                     locationManager.requestWhenInUseAuthorization()
                     locationManager.delegate = locationDelegate

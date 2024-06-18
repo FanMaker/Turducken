@@ -16,29 +16,30 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
     let sdk: FanMakerSDK
 
     public init(sdk: FanMakerSDK, configuration: WKWebViewConfiguration) {
+        let instanceSdk = sdk
         self.sdk = sdk
         self.webView = WKWebView(frame: .zero, configuration: configuration)
-        FanMakerSDK.currentWebView = self.webView
+        self.sdk.currentWebView = self.webView
 
-        let path = "site_details/info"
+        let path = "site_details/sdk"
 
         let semaphore = DispatchSemaphore(value: 0)
         var urlString : String = ""
         DispatchQueue.global().async {
-            FanMakerSDKHttp.get(sdk: sdk, path: path, model: FanMakerSDKSiteDetailsResponse.self) { result in
+            FanMakerSDKHttp.get(sdk: instanceSdk, path: path, model: FanMakerSDKInfoResponse.self) { result in
                 switch(result) {
                 case .success(let response):
-                    urlString = response.data.sdk_url
-                    FanMakerSDK.baseURL = urlString
-                    if var deepLinkPath = FanMakerSDK.deepLinkPath, !deepLinkPath.isEmpty {
+                    urlString = response.data.url
+                    instanceSdk.updateBaseUrl(urlString)
+                    if var deepLinkPath = instanceSdk.deepLinkPath, !deepLinkPath.isEmpty {
                         urlString += deepLinkPath
-                        FanMakerSDK.deepLinkPath = nil
+                        instanceSdk.updateDeepLinkPath("")
                     }
 
-                    if let beaconUniquenessThrottle = Int(response.data.site_features.beacons.beaconUniquenessThrottle) {
-                        sdk.beaconUniquenessThrottle = beaconUniquenessThrottle
+                    if let beaconUniquenessThrottle = Int(response.data.beacons.uniqueness_throttle) {
+                        instanceSdk.updateBeaconUniquenessThrottle(beaconUniquenessThrottle)
                     }
-                    NSLog("FanMaker Info: Beacon Uniqueness Throttle settled to \(sdk.beaconUniquenessThrottle) seconds")
+                    NSLog("FanMaker Info: Beacon Uniqueness Throttle settled to \(instanceSdk.beaconUniquenessThrottle) seconds")
                 case .failure(let error):
                     print(error.localizedDescription)
                     urlString = "https://admin.fanmaker.com/500"
@@ -54,8 +55,9 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
     public func prepareUIView() {
         let url : URL? = URL(string: self.urlString)
         var request : URLRequest = URLRequest(url: url!)
-        let defaults : UserDefaults = UserDefaults.standard
-        if let token = defaults.string(forKey: self.sdk.FanMakerSDKSessionToken) {
+        let defaults = self.sdk.userDefaults
+
+        if let token = defaults?.string(forKey: self.sdk.FanMakerSDKSessionToken) {
             request.setValue(token, forHTTPHeaderField: "X-FanMaker-SessionToken")
         }
         request.setValue(self.sdk.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
@@ -79,7 +81,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         request.setValue(jsonString, forHTTPHeaderField: "X-Fanmaker-Identifiers")
 
         // SDK Exclusive Token
-        request.setValue("1.8.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("2.0.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
 
         self.webView.load(request)
     }

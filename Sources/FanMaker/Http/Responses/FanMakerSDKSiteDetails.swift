@@ -1,6 +1,6 @@
 //
 //  File.swift
-//  
+// 
 //
 //  Created by Érik Escobedo on 24/05/21.
 //
@@ -25,4 +25,19 @@ public struct FanMakerSDKSiteDetailsResponse : FanMakerSDKHttpResponse {
     public let status : Int
     public let message : String
     public let data : FanMakerSDKSiteDetails
+}
+
+public struct FanMakerSDKInfoBeacons : Decodable {
+    public let uniqueness_throttle : String
+}
+
+public struct FanMakerSDKInfo : Decodable {
+    public let url : String
+    public let beacons : FanMakerSDKInfoBeacons
+}
+
+public struct FanMakerSDKInfoResponse : FanMakerSDKHttpResponse {
+    public let status : Int
+    public let message : String
+    public let data : FanMakerSDKInfo
 }

@@ -3,7 +3,44 @@ import SwiftUI
 import WebKit
 import CoreLocation
 
+// This is a wrapper for the UserDefaults class that allows us to namespace keys
+// so that we don't have to worry about key collisions with other libraries or
+// with multiple intanses of the SDK initialized at the same time.
+public struct FanMakerSDKUserDefaults {
+  private let sdk: FanMakerSDK
+  init(sdk: FanMakerSDK) {
+    self.sdk = sdk
+  }
+  private func namespacedKey(forKey: String) -> String {
+    return "\(sdk.apiKey)_\(forKey)"
+  }
+
+  func set(_ value: Any?, forKey: String) {
+    let namespacedKey = namespacedKey(forKey: forKey)
+    UserDefaults.standard.set(value, forKey: namespacedKey)
+  }
+
+  func value(forKey: String) -> Any? {
+    let namespacedKey = namespacedKey(forKey: forKey)
+    return UserDefaults.standard.value(forKey: namespacedKey)
+  }
+
+  func get(forKey: String) -> Any? {
+    return value(forKey: forKey)
+  }
+
+  func string(forKey: String) -> String? {
+    return value(forKey: forKey) as? String
+  }
+
+  func data(forKey: String) -> Data? {
+    let namespacedKey = namespacedKey(forKey: forKey)
+    return UserDefaults.standard.data(forKey: namespacedKey)
+  }
+}
+
 public class FanMakerSDK {
+    public var firstLaunch : Bool = true
     public var apiKey : String = ""
     public var userID : String = ""
     public var memberID : String = ""
@@ -27,6 +64,19 @@ public class FanMakerSDK {
     private let locationManager : CLLocationManager = CLLocationManager()
     private let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
 
+    public var userDefaults : FanMakerSDKUserDefaults? = nil
+
+    public func updateBeaconUniquenessThrottle(_ thrtl: Int) {
+        self.beaconUniquenessThrottle = thrtl
+    }
+
+    public func updateDeepLinkPath(_ path: String) {
+        self.deepLinkPath = path
+    }
+
+    public func updateBaseUrl(_ baseString: String) {
+        self.baseURL = baseString
+    }
 
     // Used for "Deep Linking"
     public func handleUrl(_ url: URL) -> Bool {
@@ -71,48 +121,71 @@ public class FanMakerSDK {
 
     public init() {}
 
-    private let locationManager : CLLocationManager = CLLocationManager()
-    private let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
-
     public func initialize(apiKey : String) {
         self.apiKey = apiKey
         self.locationEnabled = false
+        self.userDefaults = FanMakerSDKUserDefaults(sdk: self)
 
-        let defaults : UserDefaults = UserDefaults.standard
-        if defaults.string(forKey: self.FanMakerSDKSessionToken) != nil {
-            if let json = defaults.string(forKey: self.FanMakerSDKJSONIdentifiers) {
+        let defaults = self.userDefaults
+        if defaults?.string(forKey: self.FanMakerSDKSessionToken) != nil && defaults?.string(forKey: self.FanMakerSDKSessionToken) != "" {
+            if let json = defaults?.string(forKey: self.FanMakerSDKJSONIdentifiers) {
                 self.setIdentifiers(fromJSON: json)
             }
 
-            NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
         }
+        NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(appWillTerminate), name: UIApplication.willTerminateNotification, object: nil)
+    }
+
+    // Put anything in there that you want to happen when the the app is being terminated
+    @objc private func appWillTerminate() {
+        firstLaunch = true
     }
 
     // Put anything in there that you want to happen when the app enters the foreground
     @objc private func appWillEnterForeground() {
+        let appAction = firstLaunch ? "app_launch" : "app_resume"
+
+        // Put anything in here that you only want to happen when the app is launched
+        if firstLaunch {
+            firstLaunch = false
+        }
+
         if locationEnabled {
             locationManager.delegate = locationDelegate
             self.sendLocationPing()
         }
+
+        sendAppEvent(appAction)
+    }
+
+    public func sendAppEvent(_ action : String) {
+        let defaults = self.userDefaults
+        if let token = defaults?.string(forKey: self.FanMakerSDKSessionToken) {
+            let body: [String: Any] = [
+                "context": action
+            ]
+
+            FanMakerSDKHttp.post(sdk: self, path: "users/log_impression", body: body) { result in }
+        }
     }
 
     public func sendLocationPing() {
-        print("GPS Coordinates: \(locationDelegate.checkAuthorizationAndReturnCoordinates(locationManager))")
         let coords = locationDelegate.checkAuthorizationAndReturnCoordinates(locationManager)
+        let defaults = self.userDefaults
 
-        if let coords = coords as? [String: Any],
-        let lat = coords["lat"],
-        let lng = coords["lng"] {
-            let body: [String: Any] = [
-                "latitude": lat,
-                "longitude": lng
-            ]
+        if let token = defaults?.string(forKey: self.FanMakerSDKSessionToken) {
+            if let coords = coords as? [String: Any],
+            let lat = coords["lat"],
+            let lng = coords["lng"] {
+                let body: [String: Any] = [
+                    "latitude": lat,
+                    "longitude": lng
+                ]
 
-            FanMakerSDKHttp.post(path: "events/auto_checkin", body: body) { result in }
+                FanMakerSDKHttp.post(sdk: self, path: "events/auto_checkin", body: body) { result in }
+            }
         }
-
-        locationManager.delegate = locationDelegate
-        self.sendLocationPing()
     }
 
     public func isInitialized() -> Bool {
@@ -161,10 +234,6 @@ public class FanMakerSDK {
 
     public func disableLocationTracking() {
         self.locationEnabled = false
-    }
-
-    public func sendLocationPing() {
-        print("GPS Coordinates: \(locationDelegate.checkAuthorizationAndReturnCoordinates(locationManager))")
     }
 
     public func setLoadingBackgroundColor(_ bgColor : UIColor) {
