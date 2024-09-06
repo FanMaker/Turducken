@@ -440,6 +440,30 @@ Button("Show FanMaker UI", action: {
 ...
 
 ```
+
+### Passing Custom Parameters
+Similar to passing custom identifiers, you can also pass custom parameters to the SDK. Here is how to do so and some of the options.
+
+```
+...
+Button("Show FanMaker UI", action: {
+    ...
+    AppDelegate.fanmakerSDK1.setMemberID("<memberid>")
+
+    let customParameters: [String: Any] = [
+        "hide_menu": true, // used to hide the menu in the SDK. Note, you will need to pass hide_menu: false, when you want to show the menu again.
+        "viewport_width": 512, // used to inform FanMaker how wide the viewing area is
+        "viewport_height": 1024 // used to inform FanMaker how tall the viewing area is
+    ]
+
+    AppDelegate.fanmakerSDK1.fanMakerParameters(dictionary: customParameters)
+
+    ...
+})
+...
+
+```
+
 *`Note`: a value of `true` indicates that the user has opted in to a privacy permission, `false` indicates that a user has opted out.*
 
 ### Location Tracking

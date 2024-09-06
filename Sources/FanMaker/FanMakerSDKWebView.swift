@@ -67,11 +67,12 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         request.setValue(self.sdk.yinzid, forHTTPHeaderField: "X-Yinzid")
         request.setValue(self.sdk.pushToken, forHTTPHeaderField: "X-PushNotification-Token")
 
+        // ------------------------------------------------------------ >>> FanMaker Identifiers
         let jsonFanmakerIdentifiers: Data
         do {
             jsonFanmakerIdentifiers = try JSONSerialization.data(withJSONObject: self.sdk.fanmakerIdentifierLexicon)
         } catch {
-            print("Error converting dictionary to JSON: \(error)")
+            print("Error converting identifiers dictionary to JSON: \(error)")
             return
         }
 
@@ -79,9 +80,25 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         let jsonString = String(data: jsonFanmakerIdentifiers, encoding: .utf8)
         // Set the JSON string as the value for the HTTP header field
         request.setValue(jsonString, forHTTPHeaderField: "X-Fanmaker-Identifiers")
+        // ------------------------------------------------------------ <<< FanMaker Identifiers
+
+        // ------------------------------------------------------------ >>> FanMaker Parameters
+        let jsonFanmakerParameters: Data
+        do {
+            jsonFanmakerParameters = try JSONSerialization.data(withJSONObject: self.sdk.fanmakerParametersLexicon)
+        } catch {
+            print("Error converting parameters dictionary to JSON: \(error)")
+            return
+        }
+
+        // Convert the JSON data to a string
+        let jsonParamString = String(data: jsonFanmakerParameters, encoding: .utf8)
+        // Set the JSON string as the value for the HTTP header field
+        request.setValue(jsonParamString, forHTTPHeaderField: "X-Fanmaker-Parameters")
+        // ------------------------------------------------------------ <<< FanMaker Parameters
 
         // SDK Exclusive Token
-        request.setValue("2.0.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("2.0.1", forHTTPHeaderField: "X-FanMaker-SDK-Version")
 
         self.webView.load(request)
     }

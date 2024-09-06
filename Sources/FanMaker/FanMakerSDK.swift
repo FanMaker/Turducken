@@ -49,12 +49,14 @@ public class FanMakerSDK {
     public var yinzid : String = ""
     public var pushToken : String = ""
     public var fanmakerIdentifierLexicon: [String: Any] = [:]
+    public var fanmakerParametersLexicon: [String: Any] = [:]
     public var locationEnabled : Bool = false
     public var loadingBackgroundColor : UIColor = UIColor.white
     public var loadingForegroundImage : UIImage? = nil
 
     public let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
     public let FanMakerSDKJSONIdentifiers : String = "FanMakerSDKJSONIdentifiers"
+    public let FanMakerSDKJSONParameters : String = "FanMakerSDKJSONParameters"
 
     public var deepLinkPath: String?
     public var baseURL : String?
@@ -226,6 +228,18 @@ public class FanMakerSDK {
         self.fanmakerIdentifierLexicon = idLexicon
 
         return self.fanmakerIdentifierLexicon as? [String: Any] ?? [:]
+    }
+
+    public func fanMakerParameters(dictionary: [String: Any] = [:]) -> [String: Any] {
+        var idLexicon = (self.fanmakerParametersLexicon as? [String: Any]) ?? [:]
+
+        for key in dictionary.keys {
+            idLexicon[key] = dictionary[key]
+        }
+
+        self.fanmakerParametersLexicon = idLexicon
+
+        return self.fanmakerParametersLexicon as? [String: Any] ?? [:]
     }
 
     public func enableLocationTracking() {
