@@ -53,6 +53,7 @@ public class FanMakerSDK {
     public var locationEnabled : Bool = false
     public var loadingBackgroundColor : UIColor = UIColor.white
     public var loadingForegroundImage : UIImage? = nil
+    public var useDarkLoadingScreen : Bool = false
 
     public let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
     public let FanMakerSDKJSONIdentifiers : String = "FanMakerSDKJSONIdentifiers"
@@ -248,6 +249,10 @@ public class FanMakerSDK {
 
     public func disableLocationTracking() {
         self.locationEnabled = false
+    }
+
+    public func enableDarkLoadingScreen() {
+        self.useDarkLoadingScreen = true
     }
 
     public func setLoadingBackgroundColor(_ bgColor : UIColor) {

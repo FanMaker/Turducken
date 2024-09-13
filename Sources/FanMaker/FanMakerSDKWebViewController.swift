@@ -51,15 +51,29 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
         if let fgImage = self.sdk.loadingForegroundImage {
             loadingAnimation.image = fgImage
         } else {
-            var images : [UIImage] = []
-            for index in 0...29 {
-                if let path = Bundle.module.path(forResource: "fanmaker-sdk-loading-\(index)", ofType: "png") {
-                    if let image = UIImage(contentsOfFile: path) {
-                        images.append(image)
+            if self.sdk.useDarkLoadingScreen {
+                var images : [UIImage] = []
+                for index in 0...21 {
+                    if let path = Bundle.module.path(forResource: "fanmaker-sdk-dark-loading-\(index)", ofType: "png") {
+                        if let image = UIImage(contentsOfFile: path) {
+                            images.append(image)
+                        }
                     }
                 }
+                loadingAnimation.image = UIImage.animatedImage(with: images, duration: 1.0)
+                self.view.backgroundColor = UIColor(red: 0.102, green: 0.102, blue: 0.102, alpha: 1.00)
             }
-            loadingAnimation.image = UIImage.animatedImage(with: images, duration: 1.0)
+            else {
+                var images : [UIImage] = []
+                for index in 0...29 {
+                    if let path = Bundle.module.path(forResource: "fanmaker-sdk-loading-\(index)", ofType: "png") {
+                        if let image = UIImage(contentsOfFile: path) {
+                            images.append(image)
+                        }
+                    }
+                }
+                loadingAnimation.image = UIImage.animatedImage(with: images, duration: 1.0)
+            }
         }
 
         self.view.addSubview(loadingAnimation)

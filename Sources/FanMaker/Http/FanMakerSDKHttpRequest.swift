@@ -45,7 +45,7 @@ public struct FanMakerSDKHttpRequest {
 
                 let defaults = self.sdk.userDefaults
                 if let userToken = defaults?.string(forKey: self.sdk.FanMakerSDKSessionToken) {
-                    request.setValue(userToken, forHTTPHeaderField: "X-FanMaker-Token")
+                    request.setValue(userToken, forHTTPHeaderField: "X-FanMaker-SessionToken")
                     request.setValue(userToken, forHTTPHeaderField: "Authorization")
                 } else {
                     request.setValue(self.sdk.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
