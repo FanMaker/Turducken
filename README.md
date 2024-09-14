@@ -191,6 +191,12 @@ struct ContentView : View {
 }
 ```
 
+### Loading Animation | Light vs Dark
+By default the FanMaker SDK will use a Light loading animated view when initializing the FanMaker SDK. There is an optional Dark loading animated view that you can use instead:
+```
+AppDelegate.fanmakerSDK1.enableDarkLoadingScreen()
+```
+
 #### Personalization options
 
 When you present the `FanMakerSDKWebViewController` instance it will take a couple of seconds to load the content to display to the user. In the meanwhile, a white screen with a loading animation will show to indicate the user the UI is actually loading.
