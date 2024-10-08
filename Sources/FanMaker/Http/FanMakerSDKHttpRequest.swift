@@ -29,7 +29,7 @@ public struct FanMakerSDKHttpRequest {
             return
         }
 
-        request.setValue("2.0.2", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("2.0.3", forHTTPHeaderField: "X-FanMaker-SDK-Version")
         request.setValue("sdk", forHTTPHeaderField: "X-FanMaker-Mode")
         do {
             switch method {

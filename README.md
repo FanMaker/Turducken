@@ -365,7 +365,10 @@ struct ContentView : View {
             AppDelegate.fanmakerSDK1.setYinzid("<yinzid>")
             AppDelegate.fanmakerSDK1.setPushNotificationToken("<pushToken>")
 
-            // Enable Location Tracking (Permissions should be previously asked by your app)
+            // Location Tracking is enabled by default in the FanMaker SDK. You can disable it by calling:
+            AppDelegate.fanmakerSDK1.disableLocationTracking()
+
+            // If your Host application disables location tracking, it will need to be manually enabled again before it can be used:
             AppDelegate.fanmakerSDK1.enableLocationTracking()
 
             // Make sure to setup any custom identifier before actually displaying the FanMaker UI
@@ -474,7 +477,7 @@ Button("Show FanMaker UI", action: {
 
 ### Location Tracking
 
-FanMaker UI asks for user's permission to track their location the first time it loads. However, location tracking can be enabled/disabled by calling the following static functions:
+FanMaker UI asks for user's permission to track their location the first time it loads. By default the FanMaker SDK will have location tracking enabled for features like Auto Checkin. However, location tracking can be enabled/disabled by calling the following static functions:
 
 ```
 // To manually disable location tracking
@@ -485,7 +488,7 @@ AppDelegate.fanmakerSDK1.enableLocationTracking()
 ```
 
 ### Auto Checkin
-The FanMakerSDK can auto checkin users to events without them opening the FanMakerSDK itself. Once the user has successfully logged into the FanMakerSDK and granted location permissions, on subsequent opens of your application, the FanMakerSDK will automatically attempt to automatically checkin the user to events within range. Be sure to enable location tracking for the feature to be enabled:
+The FanMakerSDK can auto checkin users to events without them opening the FanMakerSDK itself. Once the user has successfully logged into the FanMakerSDK and granted location permissions, on subsequent opens of your application, the FanMakerSDK will automatically attempt to automatically checkin the user to events within range. Location Tracking is enabled by default in the FanMaker SDK, if you have disabled it with `AppDelegate.fanmakerSDK1.disableLocationTracking()` you can enable it again with:
 ```
 AppDelegate.fanmakerSDK1.enableLocationTracking()
 ```
@@ -587,7 +590,15 @@ beaconsManager1.requestAuthorization()
 beaconsManager2.requestAuthorization()
 ```
 
-When you initialize the FanMakerSDK, be sure to enable location tracking on all instances you want to use bluetooth beacons for:
+The FanMakerSDK has location tracking on by default. Location tracking in needed to scan for bluetooth beacons. Here is how you can enable or disable location tracking to block or allow scanning for bluetooth beacons
+
+To Disable location tracking:
+```
+AppDelegate.fanmakerSDK1.disableLocationTracking()
+AppDelegate.fanmakerSDK2.disableLocationTracking()
+```
+
+To Enable location tracking:
 ```
 AppDelegate.fanmakerSDK1.enableLocationTracking()
 AppDelegate.fanmakerSDK2.enableLocationTracking()

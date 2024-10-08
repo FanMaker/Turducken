@@ -41,6 +41,7 @@ public struct FanMakerSDKUserDefaults {
 
 public class FanMakerSDK {
     public var firstLaunch : Bool = true
+    public var finishedLaunching : Bool = false
     public var apiKey : String = ""
     public var userID : String = ""
     public var memberID : String = ""
@@ -50,7 +51,7 @@ public class FanMakerSDK {
     public var pushToken : String = ""
     public var fanmakerIdentifierLexicon: [String: Any] = [:]
     public var fanmakerParametersLexicon: [String: Any] = [:]
-    public var locationEnabled : Bool = false
+    public var locationEnabled : Bool = true // As of 2.0.3, we are making location enabled by default to help some clients with location tracking setup
     public var loadingBackgroundColor : UIColor = UIColor.white
     public var loadingForegroundImage : UIImage? = nil
     public var useDarkLoadingScreen : Bool = false
@@ -126,7 +127,7 @@ public class FanMakerSDK {
 
     public func initialize(apiKey : String) {
         self.apiKey = apiKey
-        self.locationEnabled = false
+        self.locationEnabled = true // As of 2.0.3, we are making location enabled by default to help some clients with location tracking setup
         self.userDefaults = FanMakerSDKUserDefaults(sdk: self)
 
         let defaults = self.userDefaults
@@ -136,23 +137,43 @@ public class FanMakerSDK {
             }
 
         }
+        NotificationCenter.default.addObserver(self, selector: #selector(didFinishLaunching), name: UIApplication.didFinishLaunchingNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appWillTerminate), name: UIApplication.willTerminateNotification, object: nil)
     }
 
     // Put anything in there that you want to happen when the the app is being terminated
     @objc private func appWillTerminate() {
+        finishedLaunching = false
         firstLaunch = true
+    }
+
+    // Put anything in there that you want to happen when the app is launched
+    @objc private func didFinishLaunching() {
+        NSLog("FanMaker ###################################################################### didFinishLaunching")
+
+        if locationEnabled {
+            locationManager.delegate = locationDelegate
+            self.sendLocationPing()
+        }
+
+        sendAppEvent("app_launch")
+        finishedLaunching = true
     }
 
     // Put anything in there that you want to happen when the app enters the foreground
     @objc private func appWillEnterForeground() {
         let appAction = firstLaunch ? "app_launch" : "app_resume"
 
-        // Put anything in here that you only want to happen when the app is launched
-        if firstLaunch {
+        // Based on the timing of our subscription, we may get a call to appWillEnterForeground
+        // on the initail launch of the app. If we have already called didFinishLaunching, we
+        // can safely ignore this call.
+        if firstLaunch && finishedLaunching {
             firstLaunch = false
+            return
         }
+
+        NSLog("FanMaker ###################################################################### appWillEnterForeground")
 
         if locationEnabled {
             locationManager.delegate = locationDelegate
@@ -263,6 +284,38 @@ public class FanMakerSDK {
         self.loadingForegroundImage = fgImage
     }
 
+    // allows us to dynamically access properties of the SDK like `sdk.valueForKey("apiKey")`
+    public func valueForKey(forKey key: String) -> String {
+        // Use Mirror to reflect on self
+        let mirror = Mirror(reflecting: self)
+        var returnString = ""
+
+        // Iterate over each child in the mirrored properties
+        for child in mirror.children {
+            // Check if the child's label matches the key
+            if child.label == key {
+                // Use String(describing:) to safely convert the value to a String
+                returnString = String(describing: child.value)
+            }
+
+            // Check if the property is a dictionary of [String: Any]
+            if let dictionary = child.value as? [String: Any],
+               let dictionaryValue = dictionary[key] {
+                // Convert the value from the dictionary to a String using String(describing:)
+                returnString = String(describing: dictionaryValue)
+            }
+        }
+
+        if returnString != "" {
+            let escapedVal = returnString.replacingOccurrences(of: "\"", with: "\\\"")
+            // Create the JavaScript string, ensuring the value is properly quoted
+            let jsString = "FanMakerSDKDebugData(\"\(escapedVal)\")"
+            return jsString
+        }
+
+        // Return nil if no property with the given key is found
+        return "FanMakerSDKDebugData(\"Property Not Found\")"
+    }
 
     public func sdkOpenUrl(scheme : String) {
         if let url = URL(string: scheme) {

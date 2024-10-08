@@ -121,6 +121,22 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                     } else {
                         print("CLLocationManager.locationServices are DISABLED")
                     }
+                case "returnSDKInformation":
+                    switch value {
+                        case "locationEnabled":
+                            var val = self.sdk.valueForKey(forKey: "locationEnabled")
+                            fanmaker!.webView.evaluateJavaScript(val)
+                        case "identifiers":
+                            var val = self.sdk.valueForKey(forKey: "fanmakerIdentifierLexicon")
+                            fanmaker!.webView.evaluateJavaScript(val)
+                        case "params":
+                            var val = self.sdk.valueForKey(forKey: "fanmakerParametersLexicon")
+                            fanmaker!.webView.evaluateJavaScript(val)
+                        default:
+                            var val = self.sdk.valueForKey(forKey: value)
+                            fanmaker!.webView.evaluateJavaScript(val)
+                            break
+                    }
                 default:
                     break;
                 }
