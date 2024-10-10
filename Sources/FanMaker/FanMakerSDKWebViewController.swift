@@ -102,27 +102,53 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                     locationManager.requestLocation()
                 case "updateLocation":
                     if self.sdk.locationEnabled && CLLocationManager.locationServicesEnabled() {
-                        var authorizationStatus : CLAuthorizationStatus
-                        if #available(iOS 14.0, *) {
-                            authorizationStatus = locationManager.authorizationStatus
-                        } else {
-                            authorizationStatus = CLLocationManager.authorizationStatus()
-                        }
+                        locationManager.delegate = locationDelegate
+                        locationDelegate.checkAuthorizationAndRequestLocation(locationManager) { result in
+                            switch result {
+                            case .success(let coordinates):
+                                let cords = "{\"lat\":\(coordinates["lat"]!), \"lng\":\(coordinates["lng"]!)}"
 
-                        switch authorizationStatus {
-                        case .notDetermined, .restricted, .denied:
-                            print("Access Denied")
-                            fanmaker!.webView.evaluateJavaScript("FanMakerReceiveLocationAuthorization(false)")
-                        case .authorizedAlways, .authorizedWhenInUse:
-                            fanmaker!.webView.evaluateJavaScript("FanMakerReceiveLocation(\(locationDelegate.coords()))")
-                        @unknown default:
-                            print("Unknown error")
+                                NSLog("FanMaker Location Received ###############################################################")
+                                self.fanmaker!.webView.evaluateJavaScript("FanMakerReceiveLocation(\(cords))")
+                            case .failure(let error):
+                                NSLog("FanMaker Location Could Not Be Determined #########################################################")
+                                self.fanmaker!.webView.evaluateJavaScript("FanMakerReceiveLocationAuthorization(false)")
+                            }
                         }
                     } else {
-                        print("CLLocationManager.locationServices are DISABLED")
+                        NSLog("FanMaker determined that CLLocationManager.locationServices are DISABLED")
                     }
                 case "returnSDKInformation":
                     switch value {
+                        case "locationServicesEnabled":
+                            var authorizationStatus: CLAuthorizationStatus
+                            if #available(iOS 14.0, *) {
+                                authorizationStatus = locationManager.authorizationStatus
+                            } else {
+                                authorizationStatus = CLLocationManager.authorizationStatus()
+                            }
+
+                            var val = "Unknown"
+                            switch authorizationStatus {
+                                case .authorizedAlways, .authorizedWhenInUse:
+                                    if authorizationStatus == .authorizedAlways {
+                                        val = "Always"
+                                    } else {
+                                        val = "When In Use"
+                                    }
+                                case .denied, .restricted, .notDetermined:
+                                    if authorizationStatus == .denied {
+                                        val = "Denied"
+                                    } else if authorizationStatus == .restricted {
+                                        val = "Restricted"
+                                    } else {
+                                        val = "Not Determined"
+                                    }
+                                @unknown default:
+                                    val = "Unknown"
+                            }
+
+                            fanmaker!.webView.evaluateJavaScript("FanMakerSDKDebugData(\"\(val)\")")
                         case "locationEnabled":
                             var val = self.sdk.valueForKey(forKey: "locationEnabled")
                             fanmaker!.webView.evaluateJavaScript(val)

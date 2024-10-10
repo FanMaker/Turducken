@@ -183,6 +183,29 @@ public class FanMakerSDK {
         sendAppEvent(appAction)
     }
 
+    public func sendLocationPing() {
+        NSLog("FanMaker Start Auto Checkin. Location Enabled: \(self.locationEnabled)")
+        if self.locationEnabled {
+            locationManager.delegate = locationDelegate
+            let defaults = self.userDefaults
+            if let token = defaults?.string(forKey: self.FanMakerSDKSessionToken) {
+                locationDelegate.checkAuthorizationAndRequestLocation(locationManager) { result in
+                    switch result {
+                    case .success(let coordinates):
+                        let body: [String: Any] = [
+                            "latitude": coordinates["lat"]!,
+                            "longitude": coordinates["lng"]!
+                        ]
+                        NSLog("FanMaker sendLocationPing posting AUTO CHECKIN #################################################################")
+                        FanMakerSDKHttp.post(sdk: self, path: "events/auto_checkin", body: body) { result in }
+                    case .failure(let error):
+                        NSLog("FanMaker sendLocationPing failed with error: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+    }
+
     public func sendAppEvent(_ action : String) {
         let defaults = self.userDefaults
         if let token = defaults?.string(forKey: self.FanMakerSDKSessionToken) {
@@ -191,24 +214,6 @@ public class FanMakerSDK {
             ]
 
             FanMakerSDKHttp.post(sdk: self, path: "users/log_impression", body: body) { result in }
-        }
-    }
-
-    public func sendLocationPing() {
-        let coords = locationDelegate.checkAuthorizationAndReturnCoordinates(locationManager)
-        let defaults = self.userDefaults
-
-        if let token = defaults?.string(forKey: self.FanMakerSDKSessionToken) {
-            if let coords = coords as? [String: Any],
-            let lat = coords["lat"],
-            let lng = coords["lng"] {
-                let body: [String: Any] = [
-                    "latitude": lat,
-                    "longitude": lng
-                ]
-
-                FanMakerSDKHttp.post(sdk: self, path: "events/auto_checkin", body: body) { result in }
-            }
         }
     }
 
