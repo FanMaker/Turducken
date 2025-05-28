@@ -307,7 +307,7 @@ turducken://FanMaker/store/items/1234
 The `AppDelegate.fanmakerSDK1.canHandleUrl(<URL>)` determines if the url can be used by the FanMaker SDK, enforcing the `FanMaker` (case insensitive) prefix in the requested URL. Which will return a `Bool`
 The `AppDelegate.fanmakerSDK1.handleUrl(<URL>)` will setup the necessary connections within the `FanMakerSDK` so that when the WebView is next viewed, it will navigate to the appropriate place.
 
-**Note**: it is recommended that you trigger your sheet to display the `FanMakerUI` after a link has been handeled. On subsequent loads of the webview, the standard path will be used instead. FanMaker can help you format your links to sections of the SDK approprately.
+**Note**: it is recommended that you trigger your sheet to display the `FanMakerUI` after a link has been handeled. On subsequent loads of the webview, the standard path will be used instead. FanMaker can help you format your links to sections of the SDK approprately. When passing a deeplink/universal link to the Fanmaker SDK, this simply tells the SDK that when it is opened next to navigate to the desired route. If multiple links are passed without opening the SDK, then only the latest link will be shown to the user.
 
 **Multiple FanMakerSDK intances**:
 If your application initializes multiple instances of the FanMaker SDK, you will be responsible for checking the scheme or web url to determine which instance to pass the url to:
