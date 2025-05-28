@@ -5,3 +5,7 @@
 xcuserdata/
 DerivedData/
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+# FanMaker Configuration
+Sources/FanMaker/FanMakerConfig.plist
+**/FanMakerConfig.plist

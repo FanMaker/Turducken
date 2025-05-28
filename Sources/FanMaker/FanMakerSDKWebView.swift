@@ -41,7 +41,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
                     }
                     NSLog("FanMaker Info: Beacon Uniqueness Throttle settled to \(instanceSdk.beaconUniquenessThrottle) seconds")
                 case .failure(let error):
-                    print(error.localizedDescription)
+                    NSLog("FanMaker Info: Error getting site details: \(error.localizedDescription)")
                     urlString = "https://admin.fanmaker.com/500"
                 }
                 semaphore.signal()
@@ -53,7 +53,10 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
     }
 
     public func prepareUIView() {
-        let url : URL? = URL(string: self.urlString)
+
+        var urlString = self.urlString
+        let url : URL? = URL(string: urlString)
+
         var request : URLRequest = URLRequest(url: url!)
         let defaults = self.sdk.userDefaults
 
@@ -72,7 +75,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         do {
             jsonFanmakerIdentifiers = try JSONSerialization.data(withJSONObject: self.sdk.fanmakerIdentifierLexicon)
         } catch {
-            print("Error converting identifiers dictionary to JSON: \(error)")
+            NSLog("FanMaker Error converting identifiers dictionary to JSON: \(error)")
             return
         }
 
@@ -87,7 +90,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         do {
             jsonFanmakerParameters = try JSONSerialization.data(withJSONObject: self.sdk.fanmakerParametersLexicon)
         } catch {
-            print("Error converting parameters dictionary to JSON: \(error)")
+            NSLog("FanMaker Error converting parameters dictionary to JSON: \(error)")
             return
         }
 
@@ -96,6 +99,21 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         // Set the JSON string as the value for the HTTP header field
         request.setValue(jsonParamString, forHTTPHeaderField: "X-Fanmaker-Parameters")
         // ------------------------------------------------------------ <<< FanMaker Parameters
+
+        // ------------------------------------------------------------ >>> FanMaker User Token
+        let jsonFanmakerUserToken: Data
+        do {
+            jsonFanmakerUserToken = try JSONSerialization.data(withJSONObject: self.sdk.fanmakerUserToken)
+        } catch {
+            NSLog("FanMaker Error converting user token dictionary to JSON: \(error)")
+            return
+        }
+
+        // Convert the JSON data to a string
+        let jsonUserTokenString = String(data: jsonFanmakerUserToken, encoding: .utf8)
+        // Set the JSON string as the value for the HTTP header field
+        request.setValue(jsonUserTokenString, forHTTPHeaderField: "X-FanMaker-User-Token")
+        // ------------------------------------------------------------ <<< FanMaker User Token
 
         // SDK Exclusive Token
         request.setValue("2.1.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")

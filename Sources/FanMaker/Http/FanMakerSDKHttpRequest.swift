@@ -9,7 +9,9 @@ import Foundation
 
 public struct FanMakerSDKHttpRequest {
     let sdk: FanMakerSDK
-    public static let host : String = "https://api3.fanmaker.com/api/v3"
+    // public static let apiBase = String = "https://api3.fanmaker.com"
+    public static let apiBase : String = "http://api3.fanmaker.work:3002"
+    public static let host : String = "\(apiBase)/api/v3"
     public let urlString : String
     private var request : URLRequest? = nil
 
@@ -84,11 +86,30 @@ public struct FanMakerSDKHttpRequest {
                             let response = FanMakerSDKPostResponse(status: 200, message: "", data: "")
                             onCompletion(.success(response as! HttpResponse))
                         } else {
-                            let jsonResponse = try JSONDecoder().decode(model.self, from: data)
-                            if jsonResponse.status >= 200 && jsonResponse.status < 300 {
-                                onCompletion(.success(jsonResponse))
-                            } else {
-                                onCompletion(.failure(FanMakerSDKHttpError(httpCode: jsonResponse.status, message: jsonResponse.message)))
+                            do {
+                                // First try to decode as JSON
+                                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                   let status = json["status"] as? Int,
+                                   let message = json["message"] as? String {
+                                    
+                                    // Create response with flexible data type
+                                    let response = FanMakerSDKPostResponse(
+                                        status: status,
+                                        message: message,
+                                        data: json["data"] ?? ""
+                                    )
+                                    onCompletion(.success(response as! HttpResponse))
+                                } else {
+                                    // Fall back to standard decoding
+                                    let jsonResponse = try JSONDecoder().decode(model.self, from: data)
+                                    if jsonResponse.status >= 200 && jsonResponse.status < 300 {
+                                        onCompletion(.success(jsonResponse))
+                                    } else {
+                                        onCompletion(.failure(FanMakerSDKHttpError(httpCode: jsonResponse.status, message: jsonResponse.message)))
+                                    }
+                                }
+                            } catch let jsonError as NSError {
+                                onCompletion(.failure(FanMakerSDKHttpError(code: .badResponse, message: jsonError.localizedDescription)))
                             }
                         }
                     default:
