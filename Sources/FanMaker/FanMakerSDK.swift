@@ -101,6 +101,10 @@ public class FanMakerSDK {
 
         if host.lowercased() == "fanmaker" {
             self.deepLinkPath = path
+            
+            // Perform login before loading the URL
+            _ = self.loginUserFromParams()
+            
             if((self.currentWebView != nil) && (self.baseURL != nil)) {
                 let fullUrl = (self.baseURL ?? String("")) + path
                 let url = URL(string: fullUrl)!
@@ -241,52 +245,50 @@ public class FanMakerSDK {
     }
 
     public func loginUserFromParams() -> Bool {
-        // Return early if debounce is enabled
-        if userLoginDebounce {
+        // Create a dictionary with all user identifiers
+        var identifiers: [String: Any] = [:]
+
+        // Add all the individual identifiers if they exist
+        if !self.userID.isEmpty { identifiers["user_id"] = self.userID }
+        if !self.memberID.isEmpty { identifiers["member_id"] = self.memberID }
+        if !self.studentID.isEmpty { identifiers["student_id"] = self.studentID }
+        if !self.ticketmasterID.isEmpty { identifiers["ticketmaster_id"] = self.ticketmasterID }
+        if !self.yinzid.isEmpty { identifiers["yinzid"] = self.yinzid }
+
+        // Add the fanmaker identifiers lexicon
+        if !self.fanmakerIdentifierLexicon.isEmpty {
+            identifiers["fanmaker_identifiers"] = self.fanmakerIdentifierLexicon
+        }
+
+        // Return early if there are no identifiers to send
+        if identifiers.isEmpty {
             return false
         }
 
-        // Set debounce flag
-        userLoginDebounce = true
+        // Create a semaphore to make the request synchronous
+        let semaphore = DispatchSemaphore(value: 0)
+        var success = false
 
-        // Wait for 1 second before making the request
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self = self else { return }
-
-            // Create a dictionary with all user identifiers
-            var identifiers: [String: Any] = [:]
-
-            // Add all the individual identifiers if they exist
-            if !self.userID.isEmpty { identifiers["user_id"] = self.userID }
-            if !self.memberID.isEmpty { identifiers["member_id"] = self.memberID }
-            if !self.studentID.isEmpty { identifiers["student_id"] = self.studentID }
-            if !self.ticketmasterID.isEmpty { identifiers["ticketmaster_id"] = self.ticketmasterID }
-            if !self.yinzid.isEmpty { identifiers["yinzid"] = self.yinzid }
-
-            // Add the fanmaker identifiers lexicon
-            if !self.fanmakerIdentifierLexicon.isEmpty {
-                identifiers["fanmaker_identifiers"] = self.fanmakerIdentifierLexicon
-            }
-
-            // Make the API request
-            FanMakerSDKHttp.post(sdk: self, path: "/site/auth/auto_login", body: identifiers) { result in
-                switch result {
-                case .success(let response):
-                    if response.status == 200 {
-                        // If the response data is a dictionary, set it as the user token
-                        if let tokenData = response.data as? [String: Any] {
-                            self.fanmakerUserToken = tokenData
-                        }
+        // Make the API request
+        FanMakerSDKHttp.post(sdk: self, path: "/site/auth/auto_login", body: identifiers) { result in
+            switch result {
+            case .success(let response):
+                if response.status == 200 {
+                    // If the response data is a dictionary, set it as the user token
+                    if let tokenData = response.data as? [String: Any] {
+                        self.fanmakerUserToken = tokenData
+                        success = true
                     }
-                case .failure(let error):
-                    NSLog("FanMaker loginUserFromParams failed with error: \(error.localizedDescription)")
                 }
-
-                self.userLoginDebounce = false
+            case .failure(let error):
+                NSLog("FanMaker loginUserFromParams failed with error: \(error.localizedDescription)")
             }
+            semaphore.signal()
         }
 
-        return true
+        // Wait for the request to complete
+        _ = semaphore.wait(timeout: .now() + 5.0)
+        return success
     }
 
     public func isInitialized() -> Bool {
@@ -294,27 +296,22 @@ public class FanMakerSDK {
     }
 
     public func setUserID(_ value : String) {
-        loginUserFromParams()
         self.userID = value
     }
 
     public func setMemberID(_ value : String) {
-        loginUserFromParams()
         self.memberID = value
     }
 
     public func setStudentID(_ value : String) {
-        loginUserFromParams()
         self.studentID = value
     }
 
     public func setTicketmasterID(_ value : String) {
-        loginUserFromParams()
         self.ticketmasterID = value
     }
 
     public func setYinzid(_ value : String) {
-        loginUserFromParams()
         self.yinzid = value
     }
 
