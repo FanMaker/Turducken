@@ -114,6 +114,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         // Convert the JSON data to a string
         let jsonUserTokenString = String(data: jsonFanmakerUserToken, encoding: .utf8)
         // Set the JSON string as the value for the HTTP header field
+        NSLog("-------------------------------- FanMaker User Token: \(jsonUserTokenString)")
         request.setValue(jsonUserTokenString, forHTTPHeaderField: "X-FanMaker-User-Token")
         // ------------------------------------------------------------ <<< FanMaker User Token
 
