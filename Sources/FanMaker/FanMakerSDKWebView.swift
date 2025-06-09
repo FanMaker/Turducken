@@ -53,6 +53,8 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
     }
 
     public func prepareUIView() {
+        // Perform login before preparing the webview
+        _ = sdk.loginUserFromParams()
 
         var urlString = self.urlString
         let url : URL? = URL(string: urlString)
