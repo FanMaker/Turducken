@@ -25,6 +25,10 @@ public struct FanMakerSDKHttpRequest {
     }
 
     func request<HttpResponse : FanMakerSDKHttpResponse>(method: String, body: Any, model: HttpResponse.Type, onCompletion: @escaping (Result<HttpResponse, FanMakerSDKHttpError>) -> Void) {
+        request(method: method, body: body, useSiteApiToken: false, model: model, onCompletion: onCompletion)
+    }
+    
+    func request<HttpResponse : FanMakerSDKHttpResponse>(method: String, body: Any, useSiteApiToken: Bool, model: HttpResponse.Type, onCompletion: @escaping (Result<HttpResponse, FanMakerSDKHttpError>) -> Void) {
 
         guard var request = self.request else {
             onCompletion(.failure(FanMakerSDKHttpError(code: .badUrl, message: self.urlString)))
@@ -45,13 +49,20 @@ public struct FanMakerSDKHttpRequest {
                 request.setValue("application/json", forHTTPHeaderField: "Accept")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-                let defaults = self.sdk.userDefaults
-                if let userToken = defaults?.string(forKey: self.sdk.FanMakerSDKSessionToken) {
-                    request.setValue(userToken, forHTTPHeaderField: "X-FanMaker-SessionToken")
-                    request.setValue(userToken, forHTTPHeaderField: "Authorization")
-                } else {
+                if useSiteApiToken {
+                    // Use site API token in Authorization header
                     request.setValue(self.sdk.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
                     request.setValue(self.sdk.apiKey, forHTTPHeaderField: "Authorization")
+                } else {
+                    // Default behavior: use session token if available, otherwise API key
+                    let defaults = self.sdk.userDefaults
+                    if let userToken = defaults?.string(forKey: self.sdk.FanMakerSDKSessionToken) {
+                        request.setValue(userToken, forHTTPHeaderField: "X-FanMaker-SessionToken")
+                        request.setValue(userToken, forHTTPHeaderField: "Authorization")
+                    } else {
+                        request.setValue(self.sdk.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
+                        request.setValue(self.sdk.apiKey, forHTTPHeaderField: "Authorization")
+                    }
                 }
             default:
                 onCompletion(.failure(FanMakerSDKHttpError(code: .badHttpMethod, message: method)))

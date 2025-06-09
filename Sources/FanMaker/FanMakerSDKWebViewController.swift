@@ -229,6 +229,9 @@ public struct FanMakerSDKWebViewControllerRepresentable : UIViewControllerRepres
     }
 
     public func makeUIViewController(context: Context) -> some UIViewController {
+        // Perform login before creating the web view controller
+        _ = sdk.loginUserFromParams()
+        
         return FanMakerSDKWebViewController(sdk: sdk)
     }
 

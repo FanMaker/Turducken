@@ -19,4 +19,10 @@ public struct FanMakerSDKHttp {
         let request = FanMakerSDKHttpRequest(sdk: sdk, path: path)
         request.request(method: "POST", body: body, model: FanMakerSDKPostResponse.self, onCompletion: onCompletion)
     }
+    
+    public static func post(sdk: FanMakerSDK, path: String, body: Any, useSiteApiToken: Bool, onCompletion: @escaping (Result<FanMakerSDKPostResponse, FanMakerSDKHttpError>) -> Void) {
+
+        let request = FanMakerSDKHttpRequest(sdk: sdk, path: path)
+        request.request(method: "POST", body: body, useSiteApiToken: useSiteApiToken, model: FanMakerSDKPostResponse.self, onCompletion: onCompletion)
+    }
 }
