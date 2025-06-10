@@ -102,9 +102,6 @@ public class FanMakerSDK {
         if host.lowercased() == "fanmaker" {
             self.deepLinkPath = path
             
-            // Perform login before loading the URL
-            _ = self.loginUserFromParams()
-            
             if((self.currentWebView != nil) && (self.baseURL != nil)) {
                 let fullUrl = (self.baseURL ?? String("")) + path
                 let url = URL(string: fullUrl)!
@@ -270,7 +267,7 @@ public class FanMakerSDK {
         var success = false
 
         // Make the API request
-        FanMakerSDKHttp.post(sdk: self, path: "/site/auth/auto_login", body: identifiers) { result in
+        FanMakerSDKHttp.post(sdk: self, path: "/site/auth/auto_login", body: identifiers, useSiteApiToken: true) { result in
             switch result {
             case .success(let response):
                 if response.status == 200 {
@@ -281,8 +278,9 @@ public class FanMakerSDK {
                     }
                 }
             case .failure(let error):
-                NSLog("FanMaker loginUserFromParams failed with error: \(error.localizedDescription)")
+                print("Login failed with error: \(error)")
             }
+            
             semaphore.signal()
         }
 
@@ -328,7 +326,6 @@ public class FanMakerSDK {
 
         self.fanmakerIdentifierLexicon = idLexicon
 
-        loginUserFromParams()
         return self.fanmakerIdentifierLexicon as? [String: Any] ?? [:]
     }
 
