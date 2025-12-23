@@ -7,43 +7,56 @@
 
 import Foundation
 
-public struct FanMakerSDKHttpError : LocalizedError {
-    public enum ErrorCode : Int {
-        case badUrl
-        case badHttpMethod
-        case badData
+public struct FanMakerSDKHttpError : LocalizedError, Sendable {
+    public enum ErrorCode : Int, Sendable {
+        case badUrl = 1
+        case badHttpMethod = 2
+        case badData = 3
+        case badResponse = 4
+        case unknown = 5
         case success = 200
         case forbidden = 401
         case notFound = 404
         case serverError = 500
-        case emptyResponse
-        case badResponse
-        case unknown
     }
     
     public let code : ErrorCode
+    public let httpCode : Int?
     public let message : String
     
+    public init(code: ErrorCode, message: String) {
+        self.code = code
+        self.httpCode = nil
+        self.message = message
+    }
+    
+    public init(httpCode: Int, message: String = "") {
+        self.code = ErrorCode(rawValue: httpCode) ?? .unknown
+        self.httpCode = httpCode
+        self.message = message
+    }
+    
     public var errorDescription: String? {
-        return "Error #\(code): \(message)"
+        return message
     }
 }
 
 extension FanMakerSDKHttpError {
     init(httpCode : Int) {
-        self.code = ErrorCode(rawValue: httpCode)!
+        self.httpCode = httpCode
+        self.code = ErrorCode(rawValue: httpCode) ?? .unknown
         
         switch(self.code) {
         case .notFound:
             self.message = "Not Found"
+        case .forbidden:
+            self.message = "Forbidden"
+        case .serverError:
+            self.message = "Server Error"
         default:
-            self.message = "Unknow Error"
-            break
+            self.message = "Unknown Error"
         }
     }
     
-    init(httpCode : Int, message : String) {
-        self.code = ErrorCode(rawValue: httpCode)!
-        self.message = message
-    }
+
 }

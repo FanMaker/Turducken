@@ -7,14 +7,14 @@
 
 import Foundation
 
-public protocol FanMakerSDKHttpResponse : Decodable {
+public protocol FanMakerSDKHttpResponse : Decodable, Sendable {
     associatedtype FanMakerSDKHttpResponseData
     var status : Int { get }
     var message : String { get }
     var data : FanMakerSDKHttpResponseData { get }
 }
 
-public struct FanMakerSDKPostResponse : FanMakerSDKHttpResponse {
+public struct FanMakerSDKPostResponse : FanMakerSDKHttpResponse, @unchecked Sendable {
     public typealias FanMakerSDKHttpResponseData = Any
 
     public let status : Int

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 import SwiftUI
 import WebKit
 
@@ -118,7 +119,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         // ------------------------------------------------------------ <<< FanMaker User Token
 
         // SDK Exclusive Token
-        request.setValue("3.0.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("3.1.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
 
         self.webView.load(request)
     }

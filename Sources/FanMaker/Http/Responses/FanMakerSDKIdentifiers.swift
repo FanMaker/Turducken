@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct FanMakerSDKIdentifiers: Decodable {
+public struct FanMakerSDKIdentifiers: Decodable, @unchecked Sendable {
     public let user_id: String?
     public let member_id: String?
     public let student_id: String?

@@ -8,7 +8,7 @@
 import Foundation
 import CoreLocation
 
-public enum FanMakerSDKBeaconsAuthorizationStatus : Int32, @unchecked Sendable {
+public enum FanMakerSDKBeaconsAuthorizationStatus : Int32, Sendable {
     case notDetermined = 0
     case restricted = 1
     case denied = 2
@@ -43,6 +43,7 @@ public struct FanMakerSDKBeaconRangeAction : Codable {
 }
 
 extension FanMakerSDKBeaconRangeAction {
+    @available(iOS 13.0, *)
     init(beacon: CLBeacon) {
         self.uuid = beacon.uuid.uuidString
         self.major = Int(truncating: beacon.major)
@@ -66,6 +67,7 @@ extension FanMakerSDKBeaconRangeAction {
     }
 }
 
+@available(iOS 13.0, *)
 open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     let sdk: FanMakerSDK
 
@@ -234,6 +236,7 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
         }
     }
 
+    @available(iOS 13.0, *)
     open func locationManager(_ manager: CLLocationManager, didRangeBeacons beacons: [CLBeacon], in region: CLBeaconRegion) {
         var queue = rangeActionsHistory()
         var newActions : [FanMakerSDKBeaconRangeAction] = []

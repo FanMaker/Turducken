@@ -9,8 +9,8 @@ import Foundation
 
 public struct FanMakerSDKHttpRequest {
     let sdk: FanMakerSDK
-    public static let apiBase : String = "https://api3.fanmaker.com"
-    // public static let apiBase : String = "http://api3.fanmaker.work:3002"
+    // public static let apiBase : String = "https://api3.fanmaker.com"
+    public static let apiBase : String = "http://api3.fanmaker.work:3002"
     public static let host : String = "\(apiBase)/api/v3"
     public let urlString : String
     private var request : URLRequest? = nil
@@ -35,7 +35,7 @@ public struct FanMakerSDKHttpRequest {
             return
         }
 
-        request.setValue("3.0.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("3.1.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
         request.setValue("sdk", forHTTPHeaderField: "X-FanMaker-Mode")
         do {
             switch method {

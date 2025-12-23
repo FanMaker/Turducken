@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import SwiftUI
 import WebKit
 import CoreLocation
@@ -58,6 +59,13 @@ public class FanMakerSDK {
     public var useDarkLoadingScreen : Bool = false
 
     public var userLoginDebounce : Bool = false
+
+    // Closure-based callback for close action (single listener)
+    // Usage: sdk.onClose = { params in ... }
+    public var onClose: (([String: Any]) -> Void)?
+
+    // NotificationCenter notification name for close action (supports multiple listeners)
+    public static let closeSdk = Notification.Name("FanMakerSDKClose")
 
     // NOTE: This will be used if we use the OAuth Methods
     // private var publicOauthToken: String?
@@ -445,14 +453,7 @@ public class FanMakerSDK {
 
     public func sdkOpenUrl(scheme : String) {
         if let url = URL(string: scheme) {
-            if #available(iOS 10, *) {
-                UIApplication.shared.open(url, options: [:],
-                completionHandler: {
-                    (success) in
-                        print("Open \(scheme): \(success)")
-                })
-            } else {
-                let success = UIApplication.shared.openURL(url)
+            UIApplication.shared.open(url, options: [:]) { success in
                 print("Open \(scheme): \(success)")
             }
         }

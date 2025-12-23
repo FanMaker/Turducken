@@ -84,18 +84,24 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
     }
 
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        if message.name == "fanmaker", let body = message.body as? Dictionary<String, String> {
+        if message.name == "fanmaker", let body = message.body as? Dictionary<String, Any> {
             let defaults = self.sdk.userDefaults
 
             body.forEach { key, value in
                 switch(key) {
                 case "sdkOpenUrl":
-                    self.sdk.sdkOpenUrl(scheme: value)
+                    if let urlString = value as? String {
+                        self.sdk.sdkOpenUrl(scheme: urlString)
+                    }
                 case "setToken":
-                    defaults?.set(value, forKey: self.sdk.FanMakerSDKSessionToken)
+                    if let token = value as? String {
+                        defaults?.set(token, forKey: self.sdk.FanMakerSDKSessionToken)
+                    }
                 case "setIdentifiers":
-                    self.sdk.setIdentifiers(fromJSON: value)
-                    defaults?.set(value, forKey: self.sdk.FanMakerSDKJSONIdentifiers)
+                    if let token = value as? String {
+                        self.sdk.setIdentifiers(fromJSON: token)
+                        defaults?.set(token, forKey: self.sdk.FanMakerSDKJSONIdentifiers)
+                    }
                 case "requestLocationAuthorization":
                     locationManager.requestWhenInUseAuthorization()
                     locationManager.delegate = locationDelegate
@@ -119,98 +125,123 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                         NSLog("FanMaker determined that CLLocationManager.locationServices are DISABLED")
                     }
                 case "returnSDKInformation":
-                    switch value {
-                        case "locationServicesEnabled":
-                            var authorizationStatus: CLAuthorizationStatus
-                            if #available(iOS 14.0, *) {
-                                authorizationStatus = locationManager.authorizationStatus
-                            } else {
-                                authorizationStatus = CLLocationManager.authorizationStatus()
-                            }
+                    if let value = value as? String {
+                        switch value {
+                            case "locationServicesEnabled":
+                                var authorizationStatus: CLAuthorizationStatus
+                                if #available(iOS 14.0, *) {
+                                    authorizationStatus = locationManager.authorizationStatus
+                                } else {
+                                    authorizationStatus = CLLocationManager.authorizationStatus()
+                                }
 
-                            var val = "Unknown"
-                            switch authorizationStatus {
-                                case .authorizedAlways, .authorizedWhenInUse:
-                                    if authorizationStatus == .authorizedAlways {
-                                        val = "Always"
-                                    } else {
-                                        val = "When In Use"
-                                    }
-                                case .denied, .restricted, .notDetermined:
-                                    if authorizationStatus == .denied {
-                                        val = "Denied"
-                                    } else if authorizationStatus == .restricted {
-                                        val = "Restricted"
-                                    } else {
-                                        val = "Not Determined"
-                                    }
-                                @unknown default:
-                                    val = "Unknown"
-                            }
+                                var val = "Unknown"
+                                switch authorizationStatus {
+                                    case .authorizedAlways, .authorizedWhenInUse:
+                                        if authorizationStatus == .authorizedAlways {
+                                            val = "Always"
+                                        } else {
+                                            val = "When In Use"
+                                        }
+                                    case .denied, .restricted, .notDetermined:
+                                        if authorizationStatus == .denied {
+                                            val = "Denied"
+                                        } else if authorizationStatus == .restricted {
+                                            val = "Restricted"
+                                        } else {
+                                            val = "Not Determined"
+                                        }
+                                    @unknown default:
+                                        val = "Unknown"
+                                }
 
-                            fanmaker!.webView.evaluateJavaScript("FanMakerSDKDebugData(\"\(val)\")")
-                        case "locationEnabled":
-                            var val = self.sdk.valueForKey(forKey: "locationEnabled")
-                            fanmaker!.webView.evaluateJavaScript(val)
-                        case "identifiers":
-                            var val = self.sdk.valueForKey(forKey: "fanmakerIdentifierLexicon")
-                            fanmaker!.webView.evaluateJavaScript(val)
-                        case "params":
-                            var val = self.sdk.valueForKey(forKey: "fanmakerParametersLexicon")
-                            fanmaker!.webView.evaluateJavaScript(val)
-                        default:
-                            var val = self.sdk.valueForKey(forKey: value)
-                            fanmaker!.webView.evaluateJavaScript(val)
-                            break
+                                fanmaker!.webView.evaluateJavaScript("FanMakerSDKDebugData(\"\(val)\")")
+                            case "locationEnabled":
+                                var val = self.sdk.valueForKey(forKey: "locationEnabled")
+                                fanmaker!.webView.evaluateJavaScript(val)
+                            case "identifiers":
+                                var val = self.sdk.valueForKey(forKey: "fanmakerIdentifierLexicon")
+                                fanmaker!.webView.evaluateJavaScript(val)
+                            case "params":
+                                var val = self.sdk.valueForKey(forKey: "fanmakerParametersLexicon")
+                                fanmaker!.webView.evaluateJavaScript(val)
+                            default:
+                                var val = self.sdk.valueForKey(forKey: value)
+                                fanmaker!.webView.evaluateJavaScript(val)
+                                break
+                        }
+                    }
+                case "action":
+                    // Check if the action value is "close"
+                    if let actionValue = value as? String, actionValue == "close" {
+                        // Fetch "params" from the body
+                        let params = body["params"] as? [String: Any] ?? [:]
+
+                        // Call closure-based callback if set
+                        self.sdk.onClose?(params)
+                        // Post notification for multiple listeners
+                        NotificationCenter.default.post(
+                            name: FanMakerSDK.closeSdk,
+                            object: self.sdk,
+                            userInfo: ["params": params]
+                        )
+                    } else {
+                        print("FanMaker Action Value: \(value)")
+                        // Fetch "params" from the body
+                        if let params = body["params"] as? [String: Any] {
+                            print("FanMaker Params: \(params)")
+                        }
                     }
                 case "fetchJSONValue":
-                    switch value {
-                        case "locationServicesEnabled":
-                            var authorizationStatus: CLAuthorizationStatus
-                            if #available(iOS 14.0, *) {
-                                authorizationStatus = locationManager.authorizationStatus
-                            } else {
-                                authorizationStatus = CLLocationManager.authorizationStatus()
-                            }
+                    if let value = value as? String {
+                        switch value {
+                            case "locationServicesEnabled":
+                                var authorizationStatus: CLAuthorizationStatus
+                                if #available(iOS 14.0, *) {
+                                    authorizationStatus = locationManager.authorizationStatus
+                                } else {
+                                    authorizationStatus = CLLocationManager.authorizationStatus()
+                                }
 
-                            var val = "Unknown"
-                            switch authorizationStatus {
-                                case .authorizedAlways, .authorizedWhenInUse:
-                                    if authorizationStatus == .authorizedAlways {
-                                        val = "Always"
-                                    } else {
-                                        val = "When In Use"
-                                    }
-                                case .denied, .restricted, .notDetermined:
-                                    if authorizationStatus == .denied {
-                                        val = "Denied"
-                                    } else if authorizationStatus == .restricted {
-                                        val = "Restricted"
-                                    } else {
-                                        val = "Not Determined"
-                                    }
-                                @unknown default:
-                                    val = "Unknown"
-                            }
+                                var val = "Unknown"
+                                switch authorizationStatus {
+                                    case .authorizedAlways, .authorizedWhenInUse:
+                                        if authorizationStatus == .authorizedAlways {
+                                            val = "Always"
+                                        } else {
+                                            val = "When In Use"
+                                        }
+                                    case .denied, .restricted, .notDetermined:
+                                        if authorizationStatus == .denied {
+                                            val = "Denied"
+                                        } else if authorizationStatus == .restricted {
+                                            val = "Restricted"
+                                        } else {
+                                            val = "Not Determined"
+                                        }
+                                    @unknown default:
+                                        val = "Unknown"
+                                }
 
-                            let escapedValue = val.replacingOccurrences(of: "\"", with: "\\\"")
-                            fanmaker!.webView.evaluateJavaScript("FanmakerSDKCallback(\"{ \\\"value\\\": \\\"\(escapedValue)\\\" }\")")
-                        case "locationEnabled":
-                            var val = self.sdk.jsonValueForKey(forKey: "locationEnabled")
-                            fanmaker!.webView.evaluateJavaScript(val)
-                        case "identifiers":
-                            var val = self.sdk.jsonValueForKey(forKey: "fanmakerIdentifierLexicon")
-                            fanmaker!.webView.evaluateJavaScript(val)
-                        case "params":
-                            var val = self.sdk.jsonValueForKey(forKey: "fanmakerParametersLexicon")
-                            fanmaker!.webView.evaluateJavaScript(val)
-                        case "userToken":
-                            var val = self.sdk.jsonValueForKey(forKey: "fanmakerUserToken")
-                            fanmaker!.webView.evaluateJavaScript(val)
-                        default:
-                            var val = self.sdk.jsonValueForKey(forKey: value)
-                            fanmaker!.webView.evaluateJavaScript(val)
-                            break
+                                let escapedValue = val.replacingOccurrences(of: "\"", with: "\\\"")
+                                fanmaker!.webView.evaluateJavaScript("FanmakerSDKCallback(\"{ \\\"value\\\": \\\"\(escapedValue)\\\" }\")")
+                            case "locationEnabled":
+                                var val = self.sdk.jsonValueForKey(forKey: "locationEnabled")
+                                fanmaker!.webView.evaluateJavaScript(val)
+                            case "identifiers":
+                                var val = self.sdk.jsonValueForKey(forKey: "fanmakerIdentifierLexicon")
+                                fanmaker!.webView.evaluateJavaScript(val)
+                            case "params":
+                                var val = self.sdk.jsonValueForKey(forKey: "fanmakerParametersLexicon")
+                                fanmaker!.webView.evaluateJavaScript(val)
+                            case "userToken":
+                                var val = self.sdk.jsonValueForKey(forKey: "fanmakerUserToken")
+                                fanmaker!.webView.evaluateJavaScript(val)
+                            default:
+                                var val = self.sdk.jsonValueForKey(forKey: value)
+                                fanmaker!.webView.evaluateJavaScript(val)
+                                break
+                        }
                     }
                 default:
                     break;
