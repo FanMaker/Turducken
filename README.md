@@ -191,6 +191,75 @@ struct ContentView : View {
 }
 ```
 
+### Handling SDK Close Actions
+
+The FanMaker SDK provides two ways to handle when the SDK UI is closed by the user:
+
+#### Option 1: Closure-Based Callback (Single Listener)
+
+For simple use cases where you only need one callback handler, you can use the `onClose` closure property:
+
+```swift
+import SwiftUI
+import FanMaker
+
+struct ContentView : View {
+    @State private var isShowingFanMakerUI : Bool = false
+
+    var body : some View {
+        Button("Show FanMaker UI", action: {
+            // Set up the close callback before showing the UI
+            AppDelegate.fanmakerSDK1.onClose = { params in
+                print("FanMaker SDK closed with params: \(params)")
+                // Handle the close action here
+                // For example, update UI state or perform cleanup
+                self.isShowingFanMakerUI = false
+            }
+
+            isShowingFanMakerUI = true
+        })
+        .sheet(isPresented: $isShowingFanMakerUI) {
+            FanMakerSDKWebViewControllerRepresentable(sdk: AppDelegate.fanmakerSDK1)
+            Button("Hide FanMakerUI", action: { isShowingFanMakerUI = false })
+        }
+    }
+}
+```
+
+#### Option 2: NotificationCenter (Multiple Listeners)
+
+For more complex scenarios where multiple parts of your app need to respond to SDK close events, use NotificationCenter:
+
+```swift
+import SwiftUI
+import FanMaker
+
+class MyViewModel: ObservableObject {
+    @Published var fanMakerClosed = false
+
+    init() {
+        // Set up notification observer
+        NotificationCenter.default.addObserver(
+            forName: FanMakerSDK.closeSdk,
+            object: AppDelegate.fanmakerSDK1,
+            queue: .main
+        ) { [weak self] notification in
+            if let params = notification.userInfo?["params"] as? [String: Any] {
+                print("FanMaker SDK closed with params: \(params)")
+                // Handle the close action
+                self?.fanMakerClosed = true
+            }
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+}
+```
+
+**Note**: The `params` dictionary contains any parameters passed from the web view when the close action is triggered.
+
 ### Loading Animation | Light vs Dark
 By default the FanMaker SDK will use a Light loading animated view when initializing the FanMaker SDK. There is an optional Dark loading animated view that you can use instead:
 ```
