@@ -346,6 +346,40 @@ class MyViewModel: ObservableObject {
 }
 ```
 
+#### Option 3: SwiftUI View with `.onReceive()` Modifier
+
+For SwiftUI views, you can use the `.onReceive()` modifier to listen for actions directly in your view:
+
+```swift
+import SwiftUI
+import FanMaker
+
+struct ContentView : View {
+    var body : some View {
+        VStack {
+            // Your view content
+        }
+        .onReceive(NotificationCenter.default.publisher(for: FanMakerSDK.actionNotificationName("customAction"), object: AppDelegate.fanmakerSDK1)) { notification in
+            // Access the action name
+            if let action = notification.userInfo?["action"] as? String {
+                print("Action triggered: \(action)")  // Prints: "Action triggered: customAction"
+            }
+
+            // Access the parameters
+            if let params = notification.userInfo?["params"] as? [String: Any] {
+                print("Parameters: \(params)")  // Prints: ["success": true, ...]
+
+                // Use specific parameters
+                if let success = params["success"] as? Bool {
+                    // Handle success parameter
+                    print("Success: \(success)")
+                }
+            }
+        }
+    }
+}
+```
+
 #### Removing Action Handlers
 
 To remove a registered handler:
