@@ -260,6 +260,111 @@ class MyViewModel: ObservableObject {
 
 **Note**: The `params` dictionary contains any parameters passed from the web view when the close action is triggered.
 
+### Handling Arbitrary Actions
+
+The FanMaker SDK supports dynamic action handling, allowing you to respond to any action sent from the web view without requiring SDK updates. This enables the SDK to trigger custom behaviors in your application based on actions defined by Fanmaker dynamically.
+
+#### Option 1: Closure-Based Callback (Single Listener)
+
+Register handlers for specific actions using the `onAction(_:handler:)` method:
+
+```swift
+import SwiftUI
+import FanMaker
+
+struct ContentView : View {
+    var body : some View {
+        // Register handler for "reload" action
+        AppDelegate.fanmakerSDK1.onAction("reload") { params in
+            print("Received reload action with params: \(params)")
+            // Handle reload logic here
+            if let force = params["force"] as? Bool, force {
+                // Force reload app state
+                reloadAppState()
+            }
+        }
+
+        // Register handler for "updateTheme" action
+        AppDelegate.fanmakerSDK1.onAction("updateTheme") { params in
+            if let theme = params["theme"] as? String {
+                // Update app theme
+                updateAppTheme(theme)
+            }
+        }
+
+        // Register handler for any custom action
+        AppDelegate.fanmakerSDK1.onAction("customAction") { params in
+            // Handle your custom action
+            handleCustomAction(params: params)
+        }
+    }
+}
+```
+
+#### Option 2: NotificationCenter (Multiple Listeners)
+
+Listen for actions via NotificationCenter for scenarios where multiple parts of your app need to respond:
+
+```swift
+import SwiftUI
+import FanMaker
+
+class MyViewModel: ObservableObject {
+    init() {
+        // Listen for "reload" action
+        NotificationCenter.default.addObserver(
+            forName: FanMakerSDK.actionNotificationName("reload"),
+            object: AppDelegate.fanmakerSDK1,
+            queue: .main
+        ) { [weak self] notification in
+            guard let params = notification.userInfo?["params"] as? [String: Any],
+                  let action = notification.userInfo?["action"] as? String else {
+                return
+            }
+            print("Received \(action) action with params: \(params)")
+            // Handle reload action
+            self?.handleReloadAction(params: params)
+        }
+
+        // Listen for "updateTheme" action
+        NotificationCenter.default.addObserver(
+            forName: FanMakerSDK.actionNotificationName("updateTheme"),
+            object: AppDelegate.fanmakerSDK1,
+            queue: .main
+        ) { [weak self] notification in
+            guard let params = notification.userInfo?["params"] as? [String: Any] else {
+                return
+            }
+            // Handle theme update
+            self?.handleThemeUpdate(params: params)
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+}
+```
+
+#### Removing Action Handlers
+
+To remove a registered handler:
+
+```swift
+// Remove handler for a specific action
+AppDelegate.fanmakerSDK1.removeActionHandler("reload")
+```
+
+#### How Actions Work
+
+The SDK will:
+1. Check for a registered handler via `onAction(_:handler:)`
+2. Call the handler if one exists
+3. Post a notification with the action name (e.g., `FanMakerSDKAction_reload`)
+4. Include both `params` and `action` in the notification's `userInfo`
+
+**Note**: The `params` dictionary contains any parameters passed from the web view. Actions are handled dynamically, so you can add new actions without updating the SDK code.
+
 ### Loading Animation | Light vs Dark
 By default the FanMaker SDK will use a Light loading animated view when initializing the FanMaker SDK. There is an optional Dark loading animated view that you can use instead:
 ```

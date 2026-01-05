@@ -66,6 +66,32 @@ public class FanMakerSDK {
 
     // NotificationCenter notification name for close action (supports multiple listeners)
     public static let closeSdk = Notification.Name("FanMakerSDKClose")
+    
+    // Dictionary of action handlers for dynamic action support
+    // Usage: sdk.onAction("reload") { params in ... }
+    private var actionHandlers: [String: (([String: Any]) -> Void)] = [:]
+    
+    // Register a handler for a specific action
+    // Usage: sdk.onAction("reload") { params in print("Reloading with params: \(params)") }
+    public func onAction(_ actionName: String, handler: @escaping ([String: Any]) -> Void) {
+        actionHandlers[actionName] = handler
+    }
+    
+    // Remove a handler for a specific action
+    public func removeActionHandler(_ actionName: String) {
+        actionHandlers.removeValue(forKey: actionName)
+    }
+    
+    // Get handler for a specific action (internal use)
+    internal func getActionHandler(_ actionName: String) -> (([String: Any]) -> Void)? {
+        return actionHandlers[actionName]
+    }
+    
+    // Generate notification name for a specific action
+    // Usage: NotificationCenter.default.addObserver(..., name: FanMakerSDK.actionNotificationName("reload"), ...)
+    public static func actionNotificationName(_ actionName: String) -> Notification.Name {
+        return Notification.Name("FanMakerSDKAction_\(actionName)")
+    }
 
     // NOTE: This will be used if we use the OAuth Methods
     // private var publicOauthToken: String?

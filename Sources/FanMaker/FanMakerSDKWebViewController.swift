@@ -172,19 +172,37 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                         }
                     }
                 case "action":
-                    // Check if the action value is "close"
-                    if let actionValue = value as? String, actionValue == "close" {
+                    // Handle dynamic actions
+                    if let actionValue = value as? String {
                         // Fetch "params" from the body
                         let params = body["params"] as? [String: Any] ?? [:]
 
-                        // Call closure-based callback if set
-                        self.sdk.onClose?(params)
-                        // Post notification for multiple listeners
+                        // Check for registered handler first
+                        if let handler = self.sdk.getActionHandler(actionValue) {
+                            handler(params)
+                        }
+                        // Special handling for "close" action (backward compatibility)
+                        else if actionValue == "close" {
+                            // Call closure-based callback if set
+                            self.sdk.onClose?(params)
+                        }
+
+                        // Post notification for all actions (supports multiple listeners)
+                        // This allows clients to listen via NotificationCenter without registering handlers
                         NotificationCenter.default.post(
-                            name: FanMakerSDK.closeSdk,
+                            name: FanMakerSDK.actionNotificationName(actionValue),
                             object: self.sdk,
-                            userInfo: ["params": params]
+                            userInfo: ["params": params, "action": actionValue]
                         )
+
+                        // Also post the legacy closeSdk notification for backward compatibility
+                        if actionValue == "close" {
+                            NotificationCenter.default.post(
+                                name: FanMakerSDK.closeSdk,
+                                object: self.sdk,
+                                userInfo: ["params": params]
+                            )
+                        }
                     } else {
                         print("FanMaker Action Value: \(value)")
                         // Fetch "params" from the body
