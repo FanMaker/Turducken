@@ -1,71 +1,41 @@
 # FanMaker Swift SDK for iOS App Development
 
-## :warning: BREAKING CHANGES IN 2.0 :warning:
-Version 2.0 of the FanMakerSDK has changed from static to instanced based initializtion. This means that you will need to modify your implementation to avoid service interruptions in this version. Previous versions of the SDK are no longer available for instalation. Support for SDK versions 1.x will be depreciated on December 20th, 2024, afterwords non version 2.0 + will cease to function.
-
-The benefits of SDK 2.0 are [described in detail on our blog](https://blog.fanmaker.com/sdk-2-0-background-check-ins-app-rewards-and-support-for-multiple-programs/).
-
-## Upgrading to 2.0 from 1.x
-
-### Step 1:
-Previously the FanMaker SDK was initialized like this:
-```
-FanMakerSDK.initialize(apiKey: "<SDK_KEY>")
-```
-
-Now, with the instanced based initialization, you'll need to keep track of the instance of the SDK like so:
-
-```
-let fanmakerSDK1 = FanMakerSDK()
-fanmakerSDK1.initialize(apiKey: "<SDK_KEY_1>")
-AppDelegate.fanmakerSDK1 = fanmakerSDK1
-```
-
-This way you can initialize multiple, independent versions of the FanMaker SDK. Using the `AppDelegate` allows the SDK impementation to be available throughout your application.
-
-
-### Step 2:
-When you are preparing your sheet to present the `FanMakerSDKWebViewConrollerRepresentable`, you will now also need to pass the SDK instance you initialized in Step 1.
-```
-...
-}.sheet(isPresented: $showFanMakerUI) {
-    FanMakerSDKWebViewControllerRepresentable(sdk: AppDelegate.fanmakerSDK1)
-}
-```
-
-### Step 3:
-If you are passing any values to the FanMakerSDK using one of our methods like `setMemberID`, `setTicketmasterID`, or `setFanMakerIdentifiers`, then be sure to specify which SDK instance you are passing the values to:
-
-```
-AppDelegate.fanmakerSDK1.setMemberID("123456")
-AppDelegate.fanmakerSDK1.setTicketmasterID("7890123")
-
-let fanmakerIdentifiers1: [String: Any] = [
-    "airship_channel_id": "7870978-airship-a0af9d780a9s7f07f"
-]
-AppDelegate.fanmakerSDK1.setFanMakerIdentifiers(dictionary: fanmakerIdentifiers1)
-```
-
-### Step 4:
-If you are using bluetooth beacons through the FanMaker SDK, you will need to update your implementation.
-
-Where you are initializing the `FanMakerSDKBeaconsManager`, you will now need to pass the instance of the SDK you are using:
-```
-beaconsManager1 = FanMakerSDKBeaconsManager(sdk: AppDelegate.fanmakerSDK1)
-```
-Then set the delegate as normal:
-```
-beaconsManager1.delegate = self
-```
-
-You will need to requestAuthorization for every instance of the SDK you are planning on using beacons with:
-```
-beaconsManager1.requestAuthorization()
-```
-
 ## About
 
 The FanMaker Swift SDK provides iOS developers with a way of inserting the FanMaker UI in another app. The view can be displayed as part of a navigation stack, a modal or even a subview in an app's layout.
+
+## Successful Implementation Checklist
+
+Please follow this checklist to ensure the Fanmaker SDK is implemented correctly.
+The items below are **required for certification**.
+
+- [ ] **Ensure Fanmaker opens in a full-screen sheet or modal**
+- [ ] **No primary app UI visible**
+  - No wrapper, header, or logos from the primary app present  
+    (Client branding is displayed prominently *inside* the SDK)
+  - No primary app navigation visible when opening the Fanmaker SDK to avoid confusion or menu stacking
+- [ ] **Exit behavior implemented**
+  - Swipe-down gesture for sheets **or**
+  - [Close action handled](https://github.com/FanMaker/Turducken?tab=readme-ov-file#handling-sdk-close-actions)
+- [ ] **Background GPS permissions**
+  - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#location-tracking)
+  - Functioning as expected
+- [ ] **Background Bluetooth permissions**
+  - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#beacons-tracking)
+  - Functioning as expected
+- [ ] **Push notification token**
+  - Token for each user is passed to Fanmaker
+- [ ] **Deep link handling**
+  - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#deep-linking--universal-links)
+  - Functioning as expected
+
+Additional features—such as
+[logged-in user handling](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#passing-identifiers),
+[privacy permissions](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#privacy-permissions-optional),
+or [light/dark mode support](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#loading-animation--light-vs-dark)—
+may be required based on specific client needs.
+
+The checklist above represents the **minimum required for a certified integration**.
 
 ## Usage
 
@@ -836,4 +806,66 @@ Location (required)
 
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>By sharing your location you can earn points for checking in to certain events. You may also receive exclusive offers and additional point earning opportunities based on your location</string>
+```
+## :warning: BREAKING CHANGES IN 2.0 :warning:
+Version 2.0 of the FanMakerSDK has changed from static to instanced based initializtion. This means that you will need to modify your implementation to avoid service interruptions in this version. Previous versions of the SDK are no longer available for instalation. Support for SDK versions 1.x will be depreciated on December 20th, 2024, afterwords non version 2.0 + will cease to function.
+
+The benefits of SDK 2.0 are [described in detail on our blog](https://blog.fanmaker.com/sdk-2-0-background-check-ins-app-rewards-and-support-for-multiple-programs/).
+
+## Upgrading to 2.0 from 1.x
+
+### Step 1:
+Previously the FanMaker SDK was initialized like this:
+```
+FanMakerSDK.initialize(apiKey: "<SDK_KEY>")
+```
+
+Now, with the instanced based initialization, you'll need to keep track of the instance of the SDK like so:
+
+```
+let fanmakerSDK1 = FanMakerSDK()
+fanmakerSDK1.initialize(apiKey: "<SDK_KEY_1>")
+AppDelegate.fanmakerSDK1 = fanmakerSDK1
+```
+
+This way you can initialize multiple, independent versions of the FanMaker SDK. Using the `AppDelegate` allows the SDK impementation to be available throughout your application.
+
+
+### Step 2:
+When you are preparing your sheet to present the `FanMakerSDKWebViewConrollerRepresentable`, you will now also need to pass the SDK instance you initialized in Step 1.
+```
+...
+}.sheet(isPresented: $showFanMakerUI) {
+    FanMakerSDKWebViewControllerRepresentable(sdk: AppDelegate.fanmakerSDK1)
+}
+```
+
+### Step 3:
+If you are passing any values to the FanMakerSDK using one of our methods like `setMemberID`, `setTicketmasterID`, or `setFanMakerIdentifiers`, then be sure to specify which SDK instance you are passing the values to:
+
+```
+AppDelegate.fanmakerSDK1.setMemberID("123456")
+AppDelegate.fanmakerSDK1.setTicketmasterID("7890123")
+
+let fanmakerIdentifiers1: [String: Any] = [
+    "airship_channel_id": "7870978-airship-a0af9d780a9s7f07f"
+]
+AppDelegate.fanmakerSDK1.setFanMakerIdentifiers(dictionary: fanmakerIdentifiers1)
+```
+
+### Step 4:
+If you are using bluetooth beacons through the FanMaker SDK, you will need to update your implementation.
+
+Where you are initializing the `FanMakerSDKBeaconsManager`, you will now need to pass the instance of the SDK you are using:
+```
+beaconsManager1 = FanMakerSDKBeaconsManager(sdk: AppDelegate.fanmakerSDK1)
+```
+Then set the delegate as normal:
+```
+beaconsManager1.delegate = self
+```
+
+You will need to requestAuthorization for every instance of the SDK you are planning on using beacons with:
+```
+beaconsManager1.requestAuthorization()
 ```
