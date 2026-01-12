@@ -25,6 +25,7 @@ The items below are **required for certification**.
   - Functioning as expected
 - [ ] **Push notification token**
   - Token for each user is passed to Fanmaker
+  - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#passing-a-push-notification-token)
 - [ ] **Deep link handling**
   - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#deep-linking--universal-links)
   - Functioning as expected
@@ -541,7 +542,6 @@ struct ContentView : View {
             AppDelegate.fanmakerSDK1.setStudentID("<studentid>")
             AppDelegate.fanmakerSDK1.setTicketmasterID("<ticketmasterid>")
             AppDelegate.fanmakerSDK1.setYinzid("<yinzid>")
-            AppDelegate.fanmakerSDK1.setPushNotificationToken("<pushToken>")
 
             // Location Tracking is enabled by default in the FanMaker SDK. You can disable it by calling:
             AppDelegate.fanmakerSDK1.disableLocationTracking()
@@ -569,6 +569,34 @@ AppDelegate.fanmakerSDK1.memberID
 AppDelegate.fanmakerSDK1.studentID
 AppDelegate.fanmakerSDK1.ticketmasterID
 AppDelegate.fanmakerSDK1.yinzid
+```
+
+### Passing a Push Notification Token
+In addition to user identifiers, the FanMaker SDK allows you to provide a Push Notification Token. This token enables Fanmaker to send push notifications directly to users of your application.
+
+Once you’ve obtained a valid push notification token from APNs, pass it to the FanMaker SDK before presenting the FanMaker UI. The SDK will associate the token with the current user session.
+
+```
+import SwiftUI
+import FanMaker
+
+struct ContentView : View {
+    @State private var isShowingFanMakerUI : Bool = false
+
+    var body : some View {
+        // FanMakerUI initialization
+        let fanMakerUI = FanMakerSDKWebViewController(sdk: AppDelegate.fanmakerSDK1)
+
+        Button("Show FanMaker UI", action: {
+            AppDelegate.fanmakerSDK1.setPushNotificationToken("<pushToken>")
+            isShowingFanMakerUI = true
+        })
+            .sheet(isPresented: $isShowingFanMakerUI) {
+                fanMakerUI.view
+                Button("Hide FanMakerUI", action: { isShowingFanMakerUI = false })
+            }
+    }
+}
 ```
 
 ### Passing Custom Identifiers
