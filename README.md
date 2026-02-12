@@ -1,8 +1,8 @@
-# FanMaker Swift SDK for iOS App Development
+# Fanmaker Swift SDK for iOS App Development
 
 ## About
 
-The FanMaker Swift SDK provides iOS developers with a way of inserting the FanMaker UI in another app. The view can be displayed as part of a navigation stack, a modal or even a subview in an app's layout.
+The Fanmaker Swift SDK provides iOS developers with a way of inserting the Fanmaker UI in another app. The view can be displayed as part of a navigation stack, a modal or even a subview in an app's layout.
 
 ## Successful Implementation Checklist
 
@@ -25,22 +25,22 @@ The items below are **required for certification**.
   - Functioning as expected
 - [ ] **Push notification token**
   - Token for each user is passed to Fanmaker
-  - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#passing-a-push-notification-token)
+  - [Implemented](https://github.com/Fanmaker/Turducken/tree/main?tab=readme-ov-file#passing-a-push-notification-token)
 - [ ] **Deep link handling**
-  - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#deep-linking--universal-links)
+  - [Implemented](https://github.com/Fanmaker/Turducken/tree/main?tab=readme-ov-file#deep-linking--universal-links)
   - Functioning as expected
 
 Additional features—such as
-[logged-in user handling](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#passing-identifiers),
-[privacy permissions](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#privacy-permissions-optional),
-or [light/dark mode support](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#loading-animation--light-vs-dark)—
+[logged-in user handling](https://github.com/Fanmaker/Turducken/tree/main?tab=readme-ov-file#passing-identifiers),
+[privacy permissions](https://github.com/Fanmaker/Turducken/tree/main?tab=readme-ov-file#privacy-permissions-optional),
+or [light/dark mode support](https://github.com/Fanmaker/Turducken/tree/main?tab=readme-ov-file#loading-animation--light-vs-dark)—
 may be required based on specific client needs.
 
 The checklist above represents the **minimum required for a certified integration**.
 
 ## Usage
 
-First add the FanMaker SDK to your project as a Swift Package:
+First add the Fanmaker SDK to your project as a Swift Package:
 
 ![xcode1](https://user-images.githubusercontent.com/298020/120363801-2f743e00-c2d2-11eb-89fb-3fd273072d16.png)
 
@@ -51,11 +51,11 @@ A sample iOS app utilizing the SDK is available here (https://github.com/FanMake
 
 ### Initialization
 
-To initialize the SDK you need to pass your `<SDK_KEY>` into the FanMaker SDK initializer. You need to call this code in your `AppDelegate` class as part of your `application didFinishLaunchingWithOptions` callback function. Configuration is a little different depending on what "Life Cycle" are you using.
+To initialize the SDK you need to pass your `<SDK_KEY>` into the Fanmaker SDK initializer. You need to call this code in your `AppDelegate` class as part of your `application didFinishLaunchingWithOptions` callback function. Configuration is a little different depending on what "Life Cycle" are you using.
 
 #### For UIKit
 
-If you are using `UIKit` then you should already have and `AppDelegate` class living in `AppDelegate.swift`, so you just need to add FanMaker SDK initialization code to that file under the right callback function:
+If you are using `UIKit` then you should already have and `AppDelegate` class living in `AppDelegate.swift`, so you just need to add Fanmaker SDK initialization code to that file under the right callback function:
 
 ```
 import UIKit
@@ -138,11 +138,11 @@ struct MyApp: App {
 }
 ```
 
-### Displaying FanMaker UI
+### Displaying Fanmaker UI
 
-In order to show FanMaker UI in your app, create an instance of `FanMakerSDKWebViewController` (`UIViewController` subclass) and use it as you find convenient.
+In order to show Fanmaker UI in your app, create an instance of `FanMakerSDKWebViewController` (`UIViewController` subclass) and use it as you find convenient.
 
-FanMaker SDK also provides a `FanMakerSDKWebViewControllerRepresentable` wrapper which complies with `UIViewControllerRepresentable` protocol. For example, the following code is used to show it as a sheet modal when users press a button (which we recomend):
+Fanmaker SDK also provides a `FanMakerSDKWebViewControllerRepresentable` wrapper which complies with `UIViewControllerRepresentable` protocol. For example, the following code is used to show it as a sheet modal when users press a button (which we recomend):
 
 ```
 import SwiftUI
@@ -164,7 +164,7 @@ struct ContentView : View {
 
 ### Handling SDK Close Actions
 
-The FanMaker SDK provides two ways to handle when the SDK UI is closed by the user:
+The Fanmaker SDK provides two ways to handle when the SDK UI is closed by the user:
 
 #### Option 1: Closure-Based Callback (Single Listener)
 
@@ -233,7 +233,7 @@ class MyViewModel: ObservableObject {
 
 ### Handling Arbitrary Actions
 
-The FanMaker SDK supports dynamic action handling, allowing you to respond to any action sent from the web view without requiring SDK updates. This enables the SDK to trigger custom behaviors in your application based on actions defined by Fanmaker dynamically.
+The Fanmaker SDK supports dynamic action handling, allowing you to respond to any action sent from the web view without requiring SDK updates. This enables the SDK to trigger custom behaviors in your application based on actions defined by Fanmaker dynamically.
 
 #### Option 1: Closure-Based Callback (Single Listener)
 
@@ -431,7 +431,7 @@ if !nonNilImages.isEmpty {
 ```
 
 ### Deep Linking / Universal Links
-If you wish to link to something within the FanMaker SDK, you need to setup your application to accept URL Scheme or Universal Links, or know the resource you are trying to access.
+If you wish to link to something within the Fanmaker SDK, you need to setup your application to accept URL Scheme or Universal Links, or know the resource you are trying to access.
 
 An example of using a URL scheme to open app links:
 
@@ -474,7 +474,7 @@ struct ContentView : View {
 }
 ```
 
-In the example above the `.onOpenURL` method is used to catch the URL used to open the application and so it can be handeled accordingly. The FanMaker SDK provides 2 methods for determining if a link can be handeled by FanMaker:
+In the example above the `.onOpenURL` method is used to catch the URL used to open the application and so it can be handeled accordingly. The Fanmaker SDK provides 2 methods for determining if a link can be handeled by Fanmaker:
 1) `AppDelegate.fanmakerSDK1.canHandleUrl(<URL>)`
 2) `AppDelegate.fanmakerSDK1.handleUrl(<URL>)`
 
@@ -488,13 +488,13 @@ So a link that might be used to open the prize store to a specific prize might l
 turducken://FanMaker/store/items/1234
 ```
 
-The `AppDelegate.fanmakerSDK1.canHandleUrl(<URL>)` determines if the url can be used by the FanMaker SDK, enforcing the `FanMaker` (case insensitive) prefix in the requested URL. Which will return a `Bool`
+The `AppDelegate.fanmakerSDK1.canHandleUrl(<URL>)` determines if the url can be used by the Fanmaker SDK, enforcing the `FanMaker` (case insensitive) prefix in the requested URL. Which will return a `Bool`
 The `AppDelegate.fanmakerSDK1.handleUrl(<URL>)` will setup the necessary connections within the `FanMakerSDK` so that when the WebView is next viewed, it will navigate to the appropriate place.
 
-**Note**: it is recommended that you trigger your sheet to display the `FanMakerUI` after a link has been handeled. On subsequent loads of the webview, the standard path will be used instead. FanMaker can help you format your links to sections of the SDK approprately. When passing a deeplink/universal link to the Fanmaker SDK, this simply tells the SDK that when it is opened next to navigate to the desired route. If multiple links are passed without opening the SDK, then only the latest link will be shown to the user.
+**Note**: it is recommended that you trigger your sheet to display the `FanMakerUI` after a link has been handeled. On subsequent loads of the webview, the standard path will be used instead. Fanmaker can help you format your links to sections of the SDK approprately. When passing a deeplink/universal link to the Fanmaker SDK, this simply tells the SDK that when it is opened next to navigate to the desired route. If multiple links are passed without opening the SDK, then only the latest link will be shown to the user.
 
 **Multiple FanMakerSDK intances**:
-If your application initializes multiple instances of the FanMaker SDK, you will be responsible for checking the scheme or web url to determine which instance to pass the url to:
+If your application initializes multiple instances of the Fanmaker SDK, you will be responsible for checking the scheme or web url to determine which instance to pass the url to:
 ```
 @State private var isShowingFanMakerUI : Bool = false
 @State private var isShowingFanMakerUI2 : Bool = false
@@ -528,7 +528,7 @@ If your application initializes multiple instances of the FanMaker SDK, you will
 
 ### Passing Identifiers
 
-FanMaker UI usually requires users to input their FanMaker's Credentials. However, you can make use of up to four different custom identifiers to allow a given user to automatically login when they first open FanMaker UI.
+Fanmaker UI usually requires users to input their Fanmaker's Credentials. However, you can make use of up to four different custom identifiers to allow a given user to automatically login when they first open Fanmaker UI.
 
 ```
 import SwiftUI
@@ -566,7 +566,7 @@ struct ContentView : View {
 }
 ```
 
-**Note**: All of these identifiers, along with the FanMaker's User ID, are automatically defined when a user successfully logins and become accessible via the following public variables:
+**Note**: All of these identifiers, along with the Fanmaker's User ID, are automatically defined when a user successfully logins and become accessible via the following public variables:
 
 ```
 AppDelegate.fanmakerSDK1.userID
@@ -577,9 +577,9 @@ AppDelegate.fanmakerSDK1.yinzid
 ```
 
 ### Passing a Push Notification Token
-In addition to user identifiers, the FanMaker SDK allows you to provide a Push Notification Token. This token enables Fanmaker to send push notifications directly to users of your application.
+In addition to user identifiers, the Fanmaker SDK allows you to provide a Push Notification Token. This token enables Fanmaker to send push notifications directly to users of your application.
 
-Once you’ve obtained a valid push notification token from APNs, pass it to the FanMaker SDK before presenting the FanMaker UI. The SDK will associate the token with the current user session.
+Once you’ve obtained a valid push notification token from APNs, pass it to the Fanmaker SDK before presenting the Fanmaker UI. The SDK will associate the token with the current user session.
 
 ```
 import SwiftUI
@@ -626,7 +626,7 @@ Button("Show FanMaker UI", action: {
 ```
 
 ### Privacy Permissions (Optional)
-It is possible to pass optional privacy permission details to the FanMaker SDK where we will record the settings for the user in our system. To pass this information to FanMaker, please use the following protocols. Note: it is the same way you would pass Custom Identifiers above, but with specific keys.
+It is possible to pass optional privacy permission details to the Fanmaker SDK where we will record the settings for the user in our system. To pass this information to Fanmaker, please use the following protocols. Note: it is the same way you would pass Custom Identifiers above, but with specific keys.
 
 The specific privacy opt in/out keys are as follows:
 1. `privacy_advertising`
@@ -688,7 +688,7 @@ Button("Show FanMaker UI", action: {
 
 ### Location Tracking
 
-FanMaker UI asks for user's permission to track their location the first time it loads. By default the FanMaker SDK will have location tracking enabled for features like Auto Checkin. However, location tracking can be enabled/disabled by calling the following static functions:
+Fanmaker UI asks for user's permission to track their location the first time it loads. By default the Fanmaker SDK will have location tracking enabled for features like Auto Checkin. However, location tracking can be enabled/disabled by calling the following static functions:
 
 ```
 // To manually disable location tracking
@@ -699,7 +699,7 @@ AppDelegate.fanmakerSDK1.enableLocationTracking()
 ```
 
 ### Auto Checkin
-The FanMakerSDK can auto checkin users to events without them opening the FanMakerSDK itself. Once the user has successfully logged into the FanMakerSDK and granted location permissions, on subsequent opens of your application, the FanMakerSDK will automatically attempt to automatically checkin the user to events within range. Location Tracking is enabled by default in the FanMaker SDK, if you have disabled it with `AppDelegate.fanmakerSDK1.disableLocationTracking()` you can enable it again with:
+The FanMakerSDK can auto checkin users to events without them opening the FanMakerSDK itself. Once the user has successfully logged into the FanMakerSDK and granted location permissions, on subsequent opens of your application, the FanmakerSDK will automatically attempt to automatically checkin the user to events within range. Location Tracking is enabled by default in the Fanmaker SDK, if you have disabled it with `AppDelegate.fanmakerSDK1.disableLocationTracking()` you can enable it again with:
 ```
 AppDelegate.fanmakerSDK1.enableLocationTracking()
 ```
@@ -741,9 +741,9 @@ Calling `beaconsManager1.requestAuthorization()` will prompt the user to get per
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didReceiveBeaconRegions regions: [FanMakerSDKBeaconRegion]) -> Void
 ```
-In order to actually start tracking beacons, you need to call `beaconsManager1.fetchBeaconRegions()`. Be sure you have the right permissions before calling this or it won't work. Once beacons are retrieved from FanMaker servers, `didReceiveBeacons` will be called.
+In order to actually start tracking beacons, you need to call `beaconsManager1.fetchBeaconRegions()`. Be sure you have the right permissions before calling this or it won't work. Once beacons are retrieved from Fanmaker servers, `didReceiveBeacons` will be called.
 
-**NOTE**: In order to fetch beacons from the API and start tracking them, user needs to be logged into the FanMaker UI before calling this function.
+**NOTE**: In order to fetch beacons from the API and start tracking them, user needs to be logged into the Fanmaker UI before calling this function.
 
 
 ```
@@ -764,7 +764,7 @@ This function will get called whenever a user gets a valid beacon signal, which 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didUpdateBeaconRangeActionsSendList queue: [FanMakerSDKBeaconRangeAction]) -> Void
 ```
-This function will get called whenever a valid beacon signal fails to get posted to the FanMaker servers. This may happen because of weak or failing internet connection, temporarily server errors, etc. The SDK will retry to send this queue every minute and, once it get posted successfully, this queue will be emptied and this function will be called with an empty array.
+This function will get called whenever a valid beacon signal fails to get posted to the Fanmaker servers. This may happen because of weak or failing internet connection, temporarily server errors, etc. The SDK will retry to send this queue every minute and, once it get posted successfully, this queue will be emptied and this function will be called with an empty array.
 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didFailWithError error: FanMakerSDKBeaconsError) -> Void
@@ -848,7 +848,7 @@ The benefits of SDK 2.0 are [described in detail on our blog](https://blog.fanma
 ## Upgrading to 2.0 from 1.x
 
 ### Step 1:
-Previously the FanMaker SDK was initialized like this:
+Previously the Fanmaker SDK was initialized like this:
 ```
 FanMakerSDK.initialize(apiKey: "<SDK_KEY>")
 ```
@@ -861,7 +861,7 @@ fanmakerSDK1.initialize(apiKey: "<SDK_KEY_1>")
 AppDelegate.fanmakerSDK1 = fanmakerSDK1
 ```
 
-This way you can initialize multiple, independent versions of the FanMaker SDK. Using the `AppDelegate` allows the SDK impementation to be available throughout your application.
+This way you can initialize multiple, independent versions of the Fanmaker SDK. Using the `AppDelegate` allows the SDK impementation to be available throughout your application.
 
 
 ### Step 2:
@@ -887,7 +887,7 @@ AppDelegate.fanmakerSDK1.setFanMakerIdentifiers(dictionary: fanmakerIdentifiers1
 ```
 
 ### Step 4:
-If you are using bluetooth beacons through the FanMaker SDK, you will need to update your implementation.
+If you are using bluetooth beacons through the Fanmaker SDK, you will need to update your implementation.
 
 Where you are initializing the `FanMakerSDKBeaconsManager`, you will now need to pass the instance of the SDK you are using:
 ```
