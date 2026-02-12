@@ -61,11 +61,39 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         let url : URL? = URL(string: urlString)
 
         var request : URLRequest = URLRequest(url: url!)
-        let defaults = self.sdk.userDefaults
 
-        if let token = defaults?.string(forKey: self.sdk.FanMakerSDKSessionToken) {
-            request.setValue(token, forHTTPHeaderField: "X-FanMaker-SessionToken")
+        if let token = self.sdk.sessionToken {
+            // Resolve token type and refresh OAuth tokens if expired
+            let semaphore = DispatchSemaphore(value: 0)
+            var resolvedTokenType: FanMakerSDKTokenType = .apiToken(token)
+            var resolvedRawString: String = token
+
+            FanMakerSDKTokenResolver.getValidToken(
+                tokenString: token,
+                apiBase: FanMakerSDKHttpRequest.apiBase,
+                onRefreshed: { newTokenString in
+                    resolvedRawString = newTokenString
+                    self.sdk.updateSessionToken(newTokenString)
+                },
+                completion: { result in
+                    if case .success(let validType) = result {
+                        resolvedTokenType = validType
+                    }
+                    semaphore.signal()
+                }
+            )
+            _ = semaphore.wait(timeout: .now() + 10.0)
+
+            let sessionHeaderValue = FanMakerSDKTokenResolver.sessionTokenHeaderValue(
+                for: resolvedTokenType,
+                rawTokenString: resolvedRawString
+            )
+            let authHeaderValue = FanMakerSDKTokenResolver.authorizationHeaderValue(for: resolvedTokenType)
+
+            request.setValue(sessionHeaderValue, forHTTPHeaderField: "X-FanMaker-SessionToken")
+            request.setValue(authHeaderValue, forHTTPHeaderField: "Authorization")
         }
+
         request.setValue(self.sdk.apiKey, forHTTPHeaderField: "X-FanMaker-Token")
         request.setValue(self.sdk.memberID, forHTTPHeaderField: "X-Member-ID")
         request.setValue(self.sdk.studentID, forHTTPHeaderField: "X-Student-ID")
@@ -119,7 +147,11 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         // ------------------------------------------------------------ <<< FanMaker User Token
 
         // SDK Exclusive Token
-        request.setValue("3.1.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("4.0.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+
+        // Theme preference: "dark" if dark loading screen is enabled, "light" otherwise
+        let theme = self.sdk.useDarkLoadingScreen ? "dark" : "light"
+        request.setValue(theme, forHTTPHeaderField: "X-Fanmaker-Theme")
 
         self.webView.load(request)
     }

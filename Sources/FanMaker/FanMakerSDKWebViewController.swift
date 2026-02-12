@@ -52,27 +52,27 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
             loadingAnimation.image = fgImage
         } else {
             if self.sdk.useDarkLoadingScreen {
-                var images : [UIImage] = []
-                for index in 0...21 {
-                    if let path = Bundle.module.path(forResource: "fanmaker-sdk-dark-loading-\(index)", ofType: "png") {
-                        if let image = UIImage(contentsOfFile: path) {
-                            images.append(image)
-                        }
-                    }
-                }
-                loadingAnimation.image = UIImage.animatedImage(with: images, duration: 1.0)
+                // var images : [UIImage] = []
+                // for index in 0...21 {
+                //     if let path = Bundle.module.path(forResource: "fanmaker-sdk-dark-loading-\(index)", ofType: "png") {
+                //         if let image = UIImage(contentsOfFile: path) {
+                //             images.append(image)
+                //         }
+                //     }
+                // }
+                // loadingAnimation.image = UIImage.animatedImage(with: images, duration: 1.0)
                 self.view.backgroundColor = UIColor(red: 0.102, green: 0.102, blue: 0.102, alpha: 1.00)
             }
             else {
-                var images : [UIImage] = []
-                for index in 0...29 {
-                    if let path = Bundle.module.path(forResource: "fanmaker-sdk-loading-\(index)", ofType: "png") {
-                        if let image = UIImage(contentsOfFile: path) {
-                            images.append(image)
-                        }
-                    }
-                }
-                loadingAnimation.image = UIImage.animatedImage(with: images, duration: 1.0)
+                // var images : [UIImage] = []
+                // for index in 0...29 {
+                //     if let path = Bundle.module.path(forResource: "fanmaker-sdk-loading-\(index)", ofType: "png") {
+                //         if let image = UIImage(contentsOfFile: path) {
+                //             images.append(image)
+                //         }
+                //     }
+                // }
+                // loadingAnimation.image = UIImage.animatedImage(with: images, duration: 1.0)
             }
         }
 
@@ -97,6 +97,8 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                     if let token = value as? String {
                         defaults?.set(token, forKey: self.sdk.FanMakerSDKSessionToken)
                     }
+                    var dict: [String: Any] = [:]
+                    print("FanMaker ---------------------------------------------------------- Set Session Token Received")
                 case "setIdentifiers":
                     if let token = value as? String {
                         self.sdk.setIdentifiers(fromJSON: token)
@@ -162,6 +164,9 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                             case "identifiers":
                                 var val = self.sdk.valueForKey(forKey: "fanmakerIdentifierLexicon")
                                 fanmaker!.webView.evaluateJavaScript(val)
+                            case "userToken":
+                                var val = self.sdk.valueForKey(forKey: "fanmakerUserToken")
+                                fanmaker!.webView.evaluateJavaScript(val)
                             case "params":
                                 var val = self.sdk.valueForKey(forKey: "fanmakerParametersLexicon")
                                 fanmaker!.webView.evaluateJavaScript(val)
@@ -213,6 +218,10 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                 case "fetchJSONValue":
                     if let value = value as? String {
                         switch value {
+                            case "sessionToken":
+                                let sessionToken = self.sdk.sessionToken ?? ""
+                                let escapedToken = sessionToken.replacingOccurrences(of: "\"", with: "\\\"")
+                                fanmaker!.webView.evaluateJavaScript("FanmakerSDKCallback(\"\(escapedToken)\")")
                             case "locationServicesEnabled":
                                 var authorizationStatus: CLAuthorizationStatus
                                 if #available(iOS 14.0, *) {
