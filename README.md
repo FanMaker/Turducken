@@ -371,7 +371,12 @@ The SDK will:
 **Note**: The `params` dictionary contains any parameters passed from the web view. Actions are handled dynamically, so you can add new actions without updating the SDK code.
 
 ### Loading Animation | Light vs Dark
-By default the FanMaker SDK will use a Light loading animated view when initializing the FanMaker SDK. There is an optional Dark loading animated view that you can use instead:
+By default the FanMaker SDK will use a Dark loading animated view when initializing the FanMaker SDK. If your application uses a light theme, you can disable the dark loading screen:
+```
+AppDelegate.fanmakerSDK1.disableDarkLoadingScreen()
+```
+
+To re-enable it:
 ```
 AppDelegate.fanmakerSDK1.enableDarkLoadingScreen()
 ```

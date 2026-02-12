@@ -14,6 +14,7 @@ public struct FanMakerSDKHttpError : LocalizedError, Sendable {
         case badData = 3
         case badResponse = 4
         case unknown = 5
+        case tokenRefreshFailed = 6
         case success = 200
         case forbidden = 401
         case notFound = 404

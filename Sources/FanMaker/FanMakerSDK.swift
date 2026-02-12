@@ -56,7 +56,7 @@ public class FanMakerSDK {
     public var locationEnabled : Bool = true // As of 2.0.3, we are making location enabled by default to help some clients with location tracking setup
     public var loadingBackgroundColor : UIColor = UIColor.white
     public var loadingForegroundImage : UIImage? = nil
-    public var useDarkLoadingScreen : Bool = false
+    public var useDarkLoadingScreen : Bool = true
 
     public var userLoginDebounce : Bool = false
 
@@ -92,12 +92,6 @@ public class FanMakerSDK {
     public static func actionNotificationName(_ actionName: String) -> Notification.Name {
         return Notification.Name("FanMakerSDKAction_\(actionName)")
     }
-
-    // NOTE: This will be used if we use the OAuth Methods
-    // private var publicOauthToken: String?
-    // private var publicOauthTokenExpiration: Date?
-    // private var siteOauthToken: String?
-    // private var siteOauthTokenExpiration: Date?
 
     public let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
     public let FanMakerSDKJSONIdentifiers : String = "FanMakerSDKJSONIdentifiers"
@@ -180,20 +174,6 @@ public class FanMakerSDK {
                 self.setIdentifiers(fromJSON: json)
             }
         }
-
-        // NOTE: this will be used if we switch to the OAuth method of access tokens for API3
-        // Get OAuth token during initialization
-        // self.getValidOAuthToken { [weak self] result in
-        //     switch result {
-        //     case .success(let token):
-        //         self?.publicOauthToken = token
-        //         // Set token expiration to 1 hour from now
-        //         self?.publicOauthTokenExpiration = Date().addingTimeInterval(3600)
-
-        //     case .failure(let error):
-        //         print("Failed to get OAuth token: \(error.localizedDescription)")
-        //     }
-        // }
 
         NotificationCenter.default.addObserver(self, selector: #selector(didFinishLaunching), name: UIApplication.didFinishLaunchingNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -301,19 +281,29 @@ public class FanMakerSDK {
         var success = false
 
         // Make the API request
+        
         FanMakerSDKHttp.post(sdk: self, path: "/site/auth/auto_login", body: identifiers, useSiteApiToken: true) { result in
+            print("FanMaker ----------------------------------------- >> Auto Login Attempt")
             switch result {
             case .success(let response):
+                print("FanMaker Status: \(response.status)")
+                print("FanMaker Message: \(response.message)")
                 if response.status == 200 {
                     // If the response data is a dictionary, set it as the user token
                     if let tokenData = response.data as? [String: Any] {
                         self.fanmakerUserToken = tokenData
                         success = true
+                        print("FanMaker ✓ Auto login successful - token set")
+                    } else {
+                        print("FanMaker ✗ Auto login failed - invalid token data format")
                     }
+                } else {
+                    print("FanMaker ✗ Auto login failed - non-200 status")
                 }
             case .failure(let error):
-                print("Login failed with error: \(error)")
+                print("FanMaker ✗ Auto login failed with error: \(error)")
             }
+            print("FanMaker ----------------------------------------- << Auto Login Attempt")
             
             semaphore.signal()
         }
@@ -385,6 +375,10 @@ public class FanMakerSDK {
 
     public func enableDarkLoadingScreen() {
         self.useDarkLoadingScreen = true
+    }
+
+    public func disableDarkLoadingScreen() {
+        self.useDarkLoadingScreen = false
     }
 
     public func setLoadingBackgroundColor(_ bgColor : UIColor) {
@@ -499,148 +493,16 @@ public class FanMakerSDK {
         } catch { }
     }
 
-    // ------------------------------------------------------------------------------------------------------------------------------------
-    // OAuth Methods
-    // NOTE: I started writing some methods for OAuth and then we decided to not implment it for the time being.
-    // If we revisit this, we need to have the client provide us with a oauth client id and then we need to fetch access tokens
-    // for both public and the site when the SDK is initialized. At the time of writing, the public exchange works but the site
-    // exchange hasn't been impemented.
-    // ------------------------------------------------------------------------------------------------------------------------------------
+    // MARK: - Session Token Persistence
 
-    // Helper method to get a valid OAuth token
-    // public func getValidOAuthToken(completion: @escaping (Result<String, Error>) -> Void) {
-    //     // Check if we have a valid token
-    //     if let token = publicOauthToken,
-    //        let expiration = publicOauthTokenExpiration,
-    //        expiration > Date() {
-    //         completion(.success(token))
-    //         return
-    //     }
+    /// The current session token, read from UserDefaults.
+    public var sessionToken: String? {
+        return self.userDefaults?.string(forKey: self.FanMakerSDKSessionToken)
+    }
 
-    //     // If token is expired or doesn't exist, request a new one
-    //     requestOAuthToken { [weak self] result in
-    //         switch result {
-    //         case .success(let response):
-    //             if let accessToken = response["access_token"] as? String,
-    //                let createdAt = response["created_at"] as? TimeInterval,
-    //                let expiresIn = response["expires_in"] as? TimeInterval {
-    //                 self?.publicOauthToken = accessToken
-    //                 // Convert Unix timestamp to Date and add expiration duration
-    //                 let expirationDate = Date(timeIntervalSince1970: createdAt).addingTimeInterval(expiresIn)
-    //                 self?.publicOauthTokenExpiration = expirationDate
-    //                 completion(.success(accessToken))
-    //             } else {
-    //                 let errorResponse: [String: Any] = [
-    //                     "error": "Required fields missing from response",
-    //                     "error_code": -1,
-    //                     "error_type": "invalid_response",
-    //                     "details": "Response must contain access_token, created_at, and expires_in"
-    //                 ]
-    //                 completion(.failure(NSError(domain: "FanMakerSDK", code: -1, userInfo: [NSLocalizedDescriptionKey: errorResponse])))
-    //             }
-    //         case .failure(let error):
-    //             completion(.failure(error))
-    //         }
-    //     }
-    // }
-
-    // NOTE: This works to fetch a public OAuth Access token if we have a client id.
-    // TODO: if we implement OAuth for API3, make the client give us the OAuth application client id
-    // so that we don't have to bake into the SDK somewhere
-    // public func requestOAuthToken(completion: @escaping (Result<[String: Any], Error>) -> Void) {
-    //     let clientId = FanMakerConfig.clientId
-    //     guard !clientId.isEmpty else {
-    //         let errorResponse: [String: Any] = [
-    //             "error": "Client ID not configured",
-    //             "error_code": -1,
-    //             "error_type": "configuration_error"
-    //         ]
-    //         completion(.failure(NSError(domain: "FanMakerSDK", code: -1, userInfo: [NSLocalizedDescriptionKey: errorResponse])))
-    //         return
-    //     }
-
-    //     // Create the request URL
-    //     guard let url = URL(string: "\(FanMakerSDKHttpRequest.apiBase)/oauth/token") else {
-    //         let errorResponse: [String: Any] = [
-    //             "error": "Invalid URL",
-    //             "error_code": -1,
-    //             "error_type": "invalid_url"
-    //         ]
-    //         completion(.failure(NSError(domain: "FanMakerSDK", code: -1, userInfo: [NSLocalizedDescriptionKey: errorResponse])))
-    //         return
-    //     }
-
-    //     // Create the request body
-    //     let body: [String: String] = [
-    //         "grant_type": "client_credentials",
-    //         "client_id": clientId
-    //     ]
-
-    //     // Create the request
-    //     var request = URLRequest(url: url)
-    //     request.httpMethod = "POST"
-    //     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    //     request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-    //     // Add the request body
-    //     do {
-    //         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-    //     } catch {
-    //         let errorResponse: [String: Any] = [
-    //             "error": "Failed to serialize request body",
-    //             "error_code": -1,
-    //             "error_type": "serialization_error",
-    //             "details": error.localizedDescription
-    //         ]
-    //         completion(.failure(NSError(domain: "FanMakerSDK", code: -1, userInfo: [NSLocalizedDescriptionKey: errorResponse])))
-    //         return
-    //     }
-
-    //     // Make the request
-    //     let task = URLSession.shared.dataTask(with: request) { data, response, error in
-    //         if let error = error {
-    //             let errorResponse: [String: Any] = [
-    //                 "error": "Network request failed",
-    //                 "error_code": -1,
-    //                 "error_type": "network_error",
-    //                 "details": error.localizedDescription
-    //             ]
-    //             completion(.failure(NSError(domain: "FanMakerSDK", code: -1, userInfo: [NSLocalizedDescriptionKey: errorResponse])))
-    //             return
-    //         }
-
-    //         guard let data = data else {
-    //             let errorResponse: [String: Any] = [
-    //                 "error": "No data received",
-    //                 "error_code": -1,
-    //                 "error_type": "no_data"
-    //             ]
-    //             completion(.failure(NSError(domain: "FanMakerSDK", code: -1, userInfo: [NSLocalizedDescriptionKey: errorResponse])))
-    //             return
-    //         }
-
-    //         do {
-    //             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-    //                 completion(.success(json))
-    //             } else {
-    //                 let errorResponse: [String: Any] = [
-    //                     "error": "Invalid response format",
-    //                     "error_code": -1,
-    //                     "error_type": "invalid_format"
-    //                 ]
-    //                 completion(.failure(NSError(domain: "FanMakerSDK", code: -1, userInfo: [NSLocalizedDescriptionKey: errorResponse])))
-    //             }
-    //         } catch {
-    //             let errorResponse: [String: Any] = [
-    //                 "error": "Failed to parse response",
-    //                 "error_code": -1,
-    //                 "error_type": "parsing_error",
-    //                 "details": error.localizedDescription
-    //             ]
-    //             completion(.failure(NSError(domain: "FanMakerSDK", code: -1, userInfo: [NSLocalizedDescriptionKey: errorResponse])))
-    //         }
-    //     }
-
-    //     task.resume()
-    // }
+    /// Updates the session token stored in UserDefaults.
+    /// Called by the token resolver after a successful OAuth token refresh.
+    public func updateSessionToken(_ tokenString: String) {
+        self.userDefaults?.set(tokenString, forKey: self.FanMakerSDKSessionToken)
+    }
 }
