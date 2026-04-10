@@ -370,25 +370,14 @@ The SDK will:
 
 **Note**: The `params` dictionary contains any parameters passed from the web view. Actions are handled dynamically, so you can add new actions without updating the SDK code.
 
-### Loading Animation | Light vs Dark
-By default the FanMaker SDK will use a Dark loading animated view when initializing the FanMaker SDK. If your application uses a light theme, you can disable the dark loading screen:
-```
-AppDelegate.fanmakerSDK1.disableDarkLoadingScreen()
-```
-
-To re-enable it:
-```
-AppDelegate.fanmakerSDK1.enableDarkLoadingScreen()
-```
-
 #### Personalization options
 
-When you present the `FanMakerSDKWebViewController` instance it will take a couple of seconds to load the content to display to the user. In the meanwhile, a white screen with a loading animation will show to indicate the user the UI is actually loading.
+When you present the `FanMakerSDKWebViewController` instance it will take a couple of seconds to load the content to display to the user. In the meanwhile, a system spinner will show to indicate the user the UI is actually loading. You can override this default spinner with a custom image or animation.
 
-You can personalize both the loading screen's background color and loading animation by calling the following methods before presenting the `FanMakerSDKWebViewController`. The prefered place to call these functions is right after calling `AppDelegate.fanmakerSDK1.initialize`
+You can personalize the loading screen's loading animation by calling the following method before presenting the `FanMakerSDKWebViewController`. The prefered place to call this function is right after calling `AppDelegate.fanmakerSDK1.initialize`
 
+<!-- AppDelegate.fanmakerSDK1.setLoadingBackgroundColor(_ bgColor : UIColor) -->
 ```
-AppDelegate.fanmakerSDK1.setLoadingBackgroundColor(_ bgColor : UIColor)
 AppDelegate.fanmakerSDK1.setLoadingForegroundImage(_ fgImage : UIImage)
 ```
 

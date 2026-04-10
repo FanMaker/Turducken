@@ -41,42 +41,30 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
 
         self.view = UIView(frame: self.view!.bounds)
         self.view.backgroundColor = self.sdk.loadingBackgroundColor
-
-        let bounds = self.view!.bounds
-        let x = bounds.width / 4
-        let y = bounds.height / 2 - x * 3 / 2
-
-        let loadingAnimation = UIImageView(frame: CGRect(x: x, y: y, width: 2 * x, height: 2 * x))
-
-        if let fgImage = self.sdk.loadingForegroundImage {
-            loadingAnimation.image = fgImage
-        } else {
-            if self.sdk.useDarkLoadingScreen {
-                // var images : [UIImage] = []
-                // for index in 0...21 {
-                //     if let path = Bundle.module.path(forResource: "fanmaker-sdk-dark-loading-\(index)", ofType: "png") {
-                //         if let image = UIImage(contentsOfFile: path) {
-                //             images.append(image)
-                //         }
-                //     }
-                // }
-                // loadingAnimation.image = UIImage.animatedImage(with: images, duration: 1.0)
-                self.view.backgroundColor = UIColor(red: 0.102, green: 0.102, blue: 0.102, alpha: 1.00)
-            }
-            else {
-                // var images : [UIImage] = []
-                // for index in 0...29 {
-                //     if let path = Bundle.module.path(forResource: "fanmaker-sdk-loading-\(index)", ofType: "png") {
-                //         if let image = UIImage(contentsOfFile: path) {
-                //             images.append(image)
-                //         }
-                //     }
-                // }
-                // loadingAnimation.image = UIImage.animatedImage(with: images, duration: 1.0)
-            }
+        if !self.sdk.useDarkLoadingScreen {
+            self.view.backgroundColor = UIColor.white
         }
 
-        self.view.addSubview(loadingAnimation)
+        if let fgImage = self.sdk.loadingForegroundImage {
+            let bounds = self.view!.bounds
+            let x = bounds.width / 4
+            let y = bounds.height / 2 - x * 3 / 2
+            let loadingAnimation = UIImageView(frame: CGRect(x: x, y: y, width: 2 * x, height: 2 * x))
+            loadingAnimation.image = fgImage
+            self.view.addSubview(loadingAnimation)
+        } else {
+
+            let spinner = UIActivityIndicatorView(style: .large)
+            spinner.color = self.sdk.useDarkLoadingScreen ? .white : .gray
+            spinner.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
+            spinner.translatesAutoresizingMaskIntoConstraints = false
+            spinner.startAnimating()
+            self.view.addSubview(spinner)
+            NSLayoutConstraint.activate([
+                spinner.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
+                spinner.centerYAnchor.constraint(equalTo: self.view.centerYAnchor)
+            ])
+        }
     }
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation) {

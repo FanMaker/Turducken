@@ -147,7 +147,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         // ------------------------------------------------------------ <<< FanMaker User Token
 
         // SDK Exclusive Token
-        request.setValue("4.0.0", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("4.0.2", forHTTPHeaderField: "X-FanMaker-SDK-Version")
 
         // Theme preference: "dark" if dark loading screen is enabled, "light" otherwise
         let theme = self.sdk.useDarkLoadingScreen ? "dark" : "light"

@@ -54,7 +54,7 @@ public class FanMakerSDK {
     public var fanmakerParametersLexicon: [String: Any] = [:]
     public var fanmakerUserToken: [String: Any] = [:]
     public var locationEnabled : Bool = true // As of 2.0.3, we are making location enabled by default to help some clients with location tracking setup
-    public var loadingBackgroundColor : UIColor = UIColor.white
+    public var loadingBackgroundColor : UIColor = UIColor(red: 0.102, green: 0.102, blue: 0.102, alpha: 1.00)
     public var loadingForegroundImage : UIImage? = nil
     public var useDarkLoadingScreen : Bool = true
 
