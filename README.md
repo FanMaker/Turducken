@@ -140,7 +140,30 @@ struct MyApp: App {
 
 In order to show Fanmaker UI in your app, create an instance of `FanMakerSDKWebViewController` (`UIViewController` subclass) and use it as you find convenient.
 
-Fanmaker SDK also provides a `FanMakerSDKWebViewControllerRepresentable` wrapper which complies with `UIViewControllerRepresentable` protocol. For example, the following code is used to show it as a sheet modal when users press a button (which we recomend):
+Pick the integration that matches your host app's UI framework:
+
+- **UIKit hosts** — instantiate `FanMakerSDKWebViewController(sdk:)` directly and present it via UIKit's `present(_:animated:)`.
+- **SwiftUI hosts** — use `FanMakerSDKWebViewControllerRepresentable` inside `.sheet` / `.fullScreenCover` (recommended below).
+
+> :warning: Do **not** bridge `FanMakerSDKWebViewControllerRepresentable` through `UIHostingController` to present from a UIKit host. The SwiftUI lifecycle that materializes the underlying controller can fail to fire in that configuration, which leaves `viewDidLoad` unrun and any deep-link path stored on the SDK unconsumed. UIKit hosts should construct the controller directly.
+
+#### UIKit
+
+```swift
+import UIKit
+import FanMaker
+
+class MyViewController: UIViewController {
+    @objc func showFanMakerUI() {
+        let fanMakerUI = FanMakerSDKWebViewController(sdk: AppDelegate.fanmakerSDK1)
+        present(fanMakerUI, animated: true)
+    }
+}
+```
+
+#### SwiftUI
+
+Fanmaker SDK provides a `FanMakerSDKWebViewControllerRepresentable` wrapper which complies with the `UIViewControllerRepresentable` protocol. For example, the following code is used to show it as a sheet modal when users press a button (which we recomend):
 
 ```
 import SwiftUI
@@ -458,6 +481,21 @@ struct ContentView : View {
             }
         }
     }
+}
+```
+
+**UIKit hosts:** instead of toggling a SwiftUI `.sheet`, construct and present `FanMakerSDKWebViewController` directly after `handleUrl` returns true:
+
+```swift
+// AppDelegate.swift / SceneDelegate.swift
+func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+    guard AppDelegate.fanmakerSDK1.canHandleUrl(url),
+          AppDelegate.fanmakerSDK1.handleUrl(url) else {
+        return false
+    }
+    let fanMakerUI = FanMakerSDKWebViewController(sdk: AppDelegate.fanmakerSDK1)
+    window?.rootViewController?.present(fanMakerUI, animated: true)
+    return true
 }
 ```
 

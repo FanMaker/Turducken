@@ -14,7 +14,7 @@ import SwiftUI
 open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
     let sdk: FanMakerSDK
 
-    init(sdk: FanMakerSDK) {
+    public init(sdk: FanMakerSDK) {
         self.sdk = sdk
         super.init(nibName: nil, bundle: nil)
     }
