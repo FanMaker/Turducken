@@ -30,11 +30,14 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
             FanMakerSDKHttp.get(sdk: instanceSdk, path: path, model: FanMakerSDKInfoResponse.self) { result in
                 switch(result) {
                 case .success(let response):
-                    urlString = response.data.url
-                    instanceSdk.updateBaseUrl(urlString)
-                    if var deepLinkPath = instanceSdk.deepLinkPath, !deepLinkPath.isEmpty {
-                        urlString += deepLinkPath
+                    let baseURL = response.data.url
+                    instanceSdk.updateBaseUrl(baseURL)
+                    if let deepLinkPath = instanceSdk.deepLinkPath, !deepLinkPath.isEmpty,
+                       let composed = fanMakerComposeURL(baseURL: baseURL, deepLinkPath: deepLinkPath)?.absoluteString {
+                        urlString = composed
                         instanceSdk.updateDeepLinkPath("")
+                    } else {
+                        urlString = baseURL
                     }
 
                     if let beaconUniquenessThrottle = Int(response.data.beacons.uniqueness_throttle) {
@@ -147,7 +150,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
         // ------------------------------------------------------------ <<< FanMaker User Token
 
         // SDK Exclusive Token
-        request.setValue("4.0.2", forHTTPHeaderField: "X-FanMaker-SDK-Version")
+        request.setValue("4.0.3", forHTTPHeaderField: "X-FanMaker-SDK-Version")
 
         // Theme preference: "dark" if dark loading screen is enabled, "light" otherwise
         let theme = self.sdk.useDarkLoadingScreen ? "dark" : "light"

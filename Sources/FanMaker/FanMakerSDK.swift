@@ -129,12 +129,11 @@ public class FanMakerSDK {
 
         if host.lowercased() == "fanmaker" {
             self.deepLinkPath = path
-            
-            if((self.currentWebView != nil) && (self.baseURL != nil)) {
-                let fullUrl = (self.baseURL ?? String("")) + path
-                let url = URL(string: fullUrl)!
-                let request = URLRequest(url: url)
-                self.currentWebView?.load(request)
+
+            if let baseURL = self.baseURL,
+               let webView = self.currentWebView,
+               let composed = fanMakerComposeURL(baseURL: baseURL, deepLinkPath: path) {
+                webView.load(URLRequest(url: composed))
             }
 
             return true
