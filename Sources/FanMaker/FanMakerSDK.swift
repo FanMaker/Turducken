@@ -96,9 +96,14 @@ public class FanMakerSDK {
     public let FanMakerSDKSessionToken : String = "FanMakerSDKSessionToken"
     public let FanMakerSDKJSONIdentifiers : String = "FanMakerSDKJSONIdentifiers"
     public let FanMakerSDKJSONParameters : String = "FanMakerSDKJSONParameters"
+    public let FanMakerSDKAllowedDomains : String = "FanMakerSDKAllowedDomains"
 
     public var deepLinkPath: String?
     public var baseURL : String?
+    // First-party hosts (lowercased) the app may open inside the SDK webview.
+    // Populated from the `site_details/sdk` response and persisted so it is
+    // available immediately on a cold-start push tap. See FanMaker/app#1885.
+    public var allowedDomains : [String] = []
     public var currentWebView : WKWebView? = nil
 
     public var beaconUniquenessThrottle : Int = 60
@@ -117,6 +122,41 @@ public class FanMakerSDK {
 
     public func updateBaseUrl(_ baseString: String) {
         self.baseURL = baseString
+    }
+
+    // Store the first-party host allowlist (from site_details/sdk) and persist
+    // it so a cold-start push tap can classify links before the next fetch.
+    public func updateAllowedDomains(_ domains: [String]) {
+        self.allowedDomains = domains.compactMap { normalizeHost($0) }
+        self.userDefaults?.set(self.allowedDomains, forKey: self.FanMakerSDKAllowedDomains)
+    }
+
+    // Normalize a stored domain or URL down to a bare lowercased host.
+    private func normalizeHost(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.contains("://"), let host = URL(string: trimmed)?.host {
+            return host.lowercased()
+        }
+        // Bare host possibly with a trailing path — keep the host segment only.
+        return trimmed.split(separator: "/").first.map { $0.lowercased() }
+    }
+
+    // True when `url` is a web link the app should hand to the system browser
+    // rather than route into the in-app webview: an http(s) URL whose host is
+    // not in the first-party allowlist (nor the currently loaded base host).
+    // Custom-scheme URLs and relative paths return false (handled elsewhere).
+    public func isExternalWebURL(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            return false
+        }
+        guard let host = url.host?.lowercased() else { return false }
+
+        var allowed = allowedDomains
+        if let base = baseURL, let baseHost = URL(string: base)?.host?.lowercased() {
+            allowed.append(baseHost)
+        }
+        return !allowed.contains(host)
     }
 
     // Used for "Deep Linking"
@@ -172,6 +212,12 @@ public class FanMakerSDK {
             if let json = defaults?.string(forKey: self.FanMakerSDKJSONIdentifiers) {
                 self.setIdentifiers(fromJSON: json)
             }
+        }
+
+        // Restore the persisted first-party host allowlist so a cold-start push
+        // tap can classify external links before site_details/sdk responds.
+        if let storedDomains = defaults?.value(forKey: self.FanMakerSDKAllowedDomains) as? [String] {
+            self.allowedDomains = storedDomains
         }
 
         NotificationCenter.default.addObserver(self, selector: #selector(didFinishLaunching), name: UIApplication.didFinishLaunchingNotification, object: nil)
