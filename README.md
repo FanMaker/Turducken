@@ -153,31 +153,40 @@ the Fanmaker UI as a full-height sheet, and closes it again when the fan is done
 There is no view controller to construct, no presentation style to choose, no
 `isShowing` state to keep in sync, and no dismissal to wire up.
 
-#### Why a sheet
+#### Presentation options
 
-A sheet, not a full-screen modal, because iOS then supplies the way out — a grabber
-and a swipe-down. That matters more than it sounds: **Fanmaker's own login page does
-not draw a close button**, so a fan who opens the UI and decides not to sign in has
-no way out of a full-screen presentation. The sheet uses a single full-height detent,
-so the content still gets the whole screen.
+| Style | What the fan gets | When to use it |
+| --- | --- | --- |
+| `.sheet` **(default)** | Full-height sheet with a grabber. iOS supplies swipe-to-dismiss. | Almost always. The fan always has a way out, whatever the content does. |
+| `.fullScreen` | Edge to edge. The only way out is a close control drawn by the content itself. | Only where you know the content draws one — and never for a flow that can land on the login page. |
 
-If your content is known to draw its own close control and you want edge-to-edge,
-pass a style to the call:
+**Why `.sheet` is the default.** iOS supplies the way out — a grabber and a
+swipe-down — and that matters more than it sounds: **Fanmaker's own login page does
+not draw a close button**. A fan who opens the UI full screen and decides not to
+sign in has no way out at all. The sheet uses a single full-height detent, so the
+content still gets the whole screen; the only thing you give up is the last few
+points at the top.
+
+**Choosing a style.** Pass one to the call, or set a default on the instance:
 
 ```swift
+// Per call — wins over the instance setting
+AppDelegate.fanmakerSDK1.present(style: .sheet)
 AppDelegate.fanmakerSDK1.present(style: .fullScreen)
+
+// Per instance — used by every present() that does not pass a style
+AppDelegate.fanmakerSDK1.presentationStyle = .fullScreen
+AppDelegate.fanmakerSDK1.present()            // full screen
+
+// Omitting the parameter never hardcodes a sheet; it defers to the instance
+AppDelegate.fanmakerSDK1.present()
 ```
 
-`.sheet` can be passed explicitly too, and omitting the parameter uses whatever
-`presentationStyle` is set to on the instance:
+Precedence is: **style passed to the call** → **`presentationStyle` on the
+instance** → **`.sheet`**.
 
-```swift
-AppDelegate.fanmakerSDK1.present(style: .sheet)      // this once
-AppDelegate.fanmakerSDK1.presentationStyle = .sheet  // for every present() after
-```
-
-A style passed to the call always wins over the instance setting. Be deliberate
-about `.fullScreen` either way — it is the presentation a fan can get stuck in.
+On iOS 13 and 14 there are no sheet detents, so `.sheet` presents as a standard
+`.pageSheet` card. It is still swipe-dismissable, which is the part that matters.
 
 #### Closing
 
@@ -191,14 +200,36 @@ The SDK closes its own screen. You do not need to do anything.
 
 #### The rest of the API
 
-- `present(style:)` — present as a sheet or full screen, just this once.
-- `present(from:)` — present from a view controller you name, for apps driving
-  several scenes. Takes `style:` too.
-- `dismiss()` — close a screen `present()` put up, from your own code.
-- `isPresenting` — whether this instance currently has a screen on display.
+```swift
+@discardableResult
+func present(style: FanMakerSDKPresentationStyle? = nil,
+             animated: Bool = true,
+             completion: (() -> Void)? = nil) -> Bool
 
-A second `present()` while a screen is already up is refused rather than stacking a
-copy, and returns `false`.
+@discardableResult
+func present(from host: UIViewController,
+             style: FanMakerSDKPresentationStyle? = nil,
+             animated: Bool = true,
+             completion: (() -> Void)? = nil) -> Bool
+
+func dismiss(animated: Bool = true)
+
+var presentationStyle: FanMakerSDKPresentationStyle   // default .sheet
+var isPresenting: Bool { get }
+```
+
+- **`present(from:)`** presents from a view controller you name, rather than the
+  topmost one. Useful for an app driving several scenes, or one that wants the UI
+  to come from a specific place in its hierarchy.
+- **`dismiss()`** closes a screen `present()` put up, for closing from your own
+  code. Web content triggering close, and a fan swiping the sheet away, both
+  already unwind on their own.
+- **`isPresenting`** is whether this instance currently has a screen on display.
+
+Both `present` methods return whether they presented anything. They return `false`
+when the SDK has not been initialized, when there is no visible view controller to
+present from, or when this instance already has a screen up — a second `present()`
+is refused rather than stacking a copy the fan then has to dismiss twice.
 
 ### Presenting it yourself (legacy)
 
