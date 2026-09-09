@@ -161,13 +161,23 @@ not draw a close button**, so a fan who opens the UI and decides not to sign in 
 no way out of a full-screen presentation. The sheet uses a single full-height detent,
 so the content still gets the whole screen.
 
-If your content is known to draw its own close control and you want edge-to-edge:
+If your content is known to draw its own close control and you want edge-to-edge,
+pass a style to the call:
 
 ```swift
-AppDelegate.fanmakerSDK1.presentationStyle = .fullScreen
+AppDelegate.fanmakerSDK1.present(style: .fullScreen)
 ```
 
-Be deliberate about that one — it is the presentation a fan can get stuck in.
+`.sheet` can be passed explicitly too, and omitting the parameter uses whatever
+`presentationStyle` is set to on the instance:
+
+```swift
+AppDelegate.fanmakerSDK1.present(style: .sheet)      // this once
+AppDelegate.fanmakerSDK1.presentationStyle = .sheet  // for every present() after
+```
+
+A style passed to the call always wins over the instance setting. Be deliberate
+about `.fullScreen` either way — it is the presentation a fan can get stuck in.
 
 #### Closing
 
@@ -181,8 +191,9 @@ The SDK closes its own screen. You do not need to do anything.
 
 #### The rest of the API
 
+- `present(style:)` — present as a sheet or full screen, just this once.
 - `present(from:)` — present from a view controller you name, for apps driving
-  several scenes.
+  several scenes. Takes `style:` too.
 - `dismiss()` — close a screen `present()` put up, from your own code.
 - `isPresenting` — whether this instance currently has a screen on display.
 

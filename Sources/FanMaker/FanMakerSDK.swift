@@ -513,7 +513,8 @@ public class FanMakerSDK {
     /// is still showing something.
     private weak var presentedScreen: FanMakerSDKWebViewController?
 
-    /// How `present()` puts the FanMaker UI on screen.
+    /// How `present()` puts the FanMaker UI on screen when no style is passed
+    /// to the call itself.
     ///
     /// Defaults to `.sheet`, and that default matters: NUX does not draw a
     /// close button on its login page, so a fan who opens the UI and does not
@@ -556,13 +557,19 @@ public class FanMakerSDK {
     /// construct `FanMakerSDKWebViewController`, or use
     /// `FanMakerSDKWebViewControllerRepresentable` in SwiftUI, exactly as
     /// before. Nothing here is required.
+    /// - Parameter style: how to present, just this once. Omit it to use
+    ///   `presentationStyle`, which is `.sheet` unless you have changed it.
     @available(iOS 13.0, *)
     @discardableResult
-    public func present(animated: Bool = true, completion: (() -> Void)? = nil) -> Bool {
+    public func present(
+        style: FanMakerSDKPresentationStyle? = nil,
+        animated: Bool = true,
+        completion: (() -> Void)? = nil
+    ) -> Bool {
         if !Thread.isMainThread {
             var result = false
             DispatchQueue.main.sync {
-                result = self.present(animated: animated, completion: completion)
+                result = self.present(style: style, animated: animated, completion: completion)
             }
             return result
         }
@@ -582,7 +589,7 @@ public class FanMakerSDK {
             return false
         }
 
-        return present(from: host, animated: animated, completion: completion)
+        return present(from: host, style: style, animated: animated, completion: completion)
     }
 
     /// Puts the FanMaker UI on screen from a view controller you name.
@@ -591,17 +598,20 @@ public class FanMakerSDK {
     /// hosts want. This is for the cases where that guess is wrong - an app
     /// driving several scenes, or one that wants the UI to come from a specific
     /// place in its hierarchy.
+    /// - Parameter style: how to present, just this once. Omit it to use
+    ///   `presentationStyle`, which is `.sheet` unless you have changed it.
     @available(iOS 13.0, *)
     @discardableResult
     public func present(
         from host: UIViewController,
+        style: FanMakerSDKPresentationStyle? = nil,
         animated: Bool = true,
         completion: (() -> Void)? = nil
     ) -> Bool {
         if !Thread.isMainThread {
             var result = false
             DispatchQueue.main.sync {
-                result = self.present(from: host, animated: animated, completion: completion)
+                result = self.present(from: host, style: style, animated: animated, completion: completion)
             }
             return result
         }
@@ -617,7 +627,7 @@ public class FanMakerSDK {
         }
 
         let screen = FanMakerSDKWebViewController(sdk: self)
-        apply(presentationStyle, to: screen)
+        apply(style ?? presentationStyle, to: screen)
         presentedScreen = screen
 
         // Only when the SDK is doing the presenting: a host that presents the

@@ -156,6 +156,43 @@ final class PresentationTests: XCTestCase {
         XCTAssertEqual(shown?.modalPresentationStyle, .fullScreen)
     }
 
+    // MARK: - the per-call style, which overrides the instance default
+
+    func testFullScreenCanBePassedToTheCall() {
+        sdk.present(from: window.rootViewController!, style: .fullScreen, animated: false)
+
+        XCTAssertEqual(window.rootViewController?.presentedViewController?.modalPresentationStyle,
+                       .fullScreen)
+    }
+
+    func testSheetCanBePassedToTheCallExplicitly() {
+        sdk.present(from: window.rootViewController!, style: .sheet, animated: false)
+
+        XCTAssertEqual(window.rootViewController?.presentedViewController?.modalPresentationStyle,
+                       .pageSheet)
+    }
+
+    func testTheCallOverridesAnInstanceDefaultOfFullScreen() {
+        // Asking for a sheet must win even when the instance was set the other
+        // way, or the parameter is not really an override.
+        sdk.presentationStyle = .fullScreen
+
+        sdk.present(from: window.rootViewController!, style: .sheet, animated: false)
+
+        XCTAssertEqual(window.rootViewController?.presentedViewController?.modalPresentationStyle,
+                       .pageSheet)
+    }
+
+    func testOmittingTheStyleFallsBackToTheInstanceDefault() {
+        sdk.presentationStyle = .fullScreen
+
+        sdk.present(from: window.rootViewController!, animated: false)
+
+        XCTAssertEqual(window.rootViewController?.presentedViewController?.modalPresentationStyle,
+                       .fullScreen,
+                       "omitting the parameter should defer to the instance, not hardcode a sheet")
+    }
+
     func testSwipingTheSheetAwayStillTellsAHostTheUiClosed() {
         // A swipe never reaches the web content's close action, so without this
         // a host tracking state would be left believing the UI was still up.
@@ -219,4 +256,29 @@ final class PresentationTests: XCTestCase {
     // finds no window, and UIKit never completes a modal transition, so nothing
     // ever reaches a window. Those are exercised by running the sample app on a
     // simulator instead.
+}
+
+/// Guards the call shapes that existed before the style parameter, so adding it
+/// stays a source-compatible change for anyone already calling present().
+@available(iOS 13.0, *)
+final class PresentationCallShapeCompatTests: XCTestCase {
+    func testTheOlderCallShapesStillCompile() {
+        let sdk = FanMakerSDK()
+        sdk.initialize(apiKey: "call-shapes-\(UUID().uuidString)")
+        let host = UIViewController()
+
+        // No assertions: this is a compile-time guarantee. Each of these was a
+        // valid call before `style:` existed and must remain one.
+        if false {
+            _ = sdk.present()
+            _ = sdk.present(animated: false)
+            _ = sdk.present(animated: false, completion: {})
+            _ = sdk.present(from: host)
+            _ = sdk.present(from: host, animated: false)
+            _ = sdk.present(from: host, animated: false, completion: {})
+            sdk.dismiss()
+            sdk.dismiss(animated: false)
+        }
+        XCTAssertTrue(true)
+    }
 }
