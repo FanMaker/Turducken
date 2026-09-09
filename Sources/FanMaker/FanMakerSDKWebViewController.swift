@@ -276,6 +276,38 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
     }
 }
 
+/// How the SDK puts the FanMaker UI on screen.
+public enum FanMakerSDKPresentationStyle {
+    /// A sheet at full height, with iOS's grabber and swipe to dismiss.
+    ///
+    /// The default, and the safe one: NUX draws no close button on its login
+    /// page, so a full screen presentation leaves a fan who does not want to
+    /// sign in with no way out.
+    case sheet
+
+    /// Edge to edge, with no way out other than a close control in the content
+    /// itself. Only appropriate where the content is known to draw one.
+    case fullScreen
+}
+
+@available(iOS 13.0, *)
+extension FanMakerSDKWebViewController: UIAdaptivePresentationControllerDelegate {
+    /// A fan swiping the sheet away never goes through the web content's close
+    /// action, so nothing would otherwise tell a host the UI had gone.
+    ///
+    /// This posts the close notification but deliberately does not invoke
+    /// `onClose`: that closure is a request to *perform* a dismissal, and the
+    /// dismissal has already happened here - calling it could send a host off
+    /// to dismiss a container of their own that is still meant to be up.
+    public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        NotificationCenter.default.post(
+            name: FanMakerSDK.closeSdk,
+            object: self.sdk,
+            userInfo: ["params": ["source": "swipe"]]
+        )
+    }
+}
+
 @available(iOS 13.0, *)
 extension FanMakerSDKWebViewController {
     /// Closes this screen, whichever way the host put it on screen.

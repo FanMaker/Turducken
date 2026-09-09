@@ -123,13 +123,60 @@ final class PresentationTests: XCTestCase {
                       "the host should not have had to build or place anything")
     }
 
-    func testPresentUsesFullScreenRatherThanASheet() {
-        // A partial-height sheet would break the full-bleed presentation the
-        // integration checklist asks for, and NUX draws its own chrome.
+    func testPresentsASheetByDefaultSoAFanIsNeverTrapped() {
+        // This default is load-bearing. NUX draws no close button on its login
+        // page, so a fan who opens the UI and does not want to sign in has no
+        // way out of a full screen presentation - verified on a device. A sheet
+        // means iOS supplies the way out.
+        sdk.present(from: window.rootViewController!, animated: false)
+
+        let shown = window.rootViewController?.presentedViewController
+        XCTAssertEqual(shown?.modalPresentationStyle, .pageSheet)
+        XCTAssertTrue(shown?.isModalInPresentation == false,
+                      "an interactive dismissal must not be blocked")
+    }
+
+    @available(iOS 15.0, *)
+    func testTheSheetIsFullHeightWithAGrabber() {
+        // Full height because the content is a whole site, and a grabber
+        // because that is the affordance the fan needs.
+        sdk.present(from: window.rootViewController!, animated: false)
+
+        let sheet = window.rootViewController?.presentedViewController?.sheetPresentationController
+        XCTAssertNotNil(sheet)
+        XCTAssertEqual(sheet?.detents, [.large()])
+        XCTAssertEqual(sheet?.prefersGrabberVisible, true)
+    }
+
+    func testFullScreenIsAvailableAsAnOptIn() {
+        sdk.presentationStyle = .fullScreen
         sdk.present(from: window.rootViewController!, animated: false)
 
         let shown = window.rootViewController?.presentedViewController
         XCTAssertEqual(shown?.modalPresentationStyle, .fullScreen)
+    }
+
+    func testSwipingTheSheetAwayStillTellsAHostTheUiClosed() {
+        // A swipe never reaches the web content's close action, so without this
+        // a host tracking state would be left believing the UI was still up.
+        sdk.present(from: window.rootViewController!, animated: false)
+        let screen = window.rootViewController?.presentedViewController as? FanMakerSDKWebViewController
+        XCTAssertNotNil(screen)
+
+        let notified = expectation(description: "close notification")
+        let token = NotificationCenter.default.addObserver(
+            forName: FanMakerSDK.closeSdk, object: sdk, queue: .main
+        ) { note in
+            let params = note.userInfo?["params"] as? [String: Any]
+            XCTAssertEqual(params?["source"] as? String, "swipe")
+            notified.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        // What UIKit calls when a fan completes the swipe.
+        screen?.presentationControllerDidDismiss(screen!.presentationController!)
+
+        wait(for: [notified], timeout: 5)
     }
 
     func testASecondPresentIsRefusedRatherThanStackingACopy() {

@@ -513,6 +513,16 @@ public class FanMakerSDK {
     /// is still showing something.
     private weak var presentedScreen: FanMakerSDKWebViewController?
 
+    /// How `present()` puts the FanMaker UI on screen.
+    ///
+    /// Defaults to `.sheet`, and that default matters: NUX does not draw a
+    /// close button on its login page, so a fan who opens the UI and does not
+    /// want to sign in has no way out of a full screen presentation. A sheet
+    /// means iOS provides the way out - a grabber and swipe to dismiss - and
+    /// the fan is never trapped by content that has no close control of its
+    /// own.
+    public var presentationStyle: FanMakerSDKPresentationStyle = .sheet
+
     /// Whether this instance currently has a FanMaker screen on display.
     public var isPresenting: Bool {
         guard let screen = presentedScreen else { return false }
@@ -607,10 +617,35 @@ public class FanMakerSDK {
         }
 
         let screen = FanMakerSDKWebViewController(sdk: self)
-        screen.modalPresentationStyle = .fullScreen
+        apply(presentationStyle, to: screen)
         presentedScreen = screen
+
+        // Only when the SDK is doing the presenting: a host that presents the
+        // controller itself owns its own presentation controller delegate, and
+        // taking that over would break their dismissal handling.
+        screen.presentationController?.delegate = screen
+
         host.present(screen, animated: animated, completion: completion)
         return true
+    }
+
+    @available(iOS 13.0, *)
+    private func apply(_ style: FanMakerSDKPresentationStyle, to screen: UIViewController) {
+        switch style {
+        case .sheet:
+            screen.modalPresentationStyle = .pageSheet
+            if #available(iOS 15.0, *), let sheet = screen.sheetPresentationController {
+                // One detent, at full height. The point is the grabber and the
+                // swipe, not a half-height card - the content is a full site
+                // and wants the room.
+                sheet.detents = [.large()]
+                sheet.prefersGrabberVisible = true
+            }
+            // On iOS 13 and 14 .pageSheet is already a swipe-dismissable card,
+            // which is the behaviour that matters here even without detents.
+        case .fullScreen:
+            screen.modalPresentationStyle = .fullScreen
+        }
     }
 
     /// Closes a screen this instance put on display with `present()`.
