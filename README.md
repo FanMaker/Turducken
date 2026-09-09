@@ -9,14 +9,20 @@ The Fanmaker Swift SDK provides iOS developers with a way of inserting the Fanma
 Please follow this checklist to ensure the Fanmaker SDK is implemented correctly.
 The items below are **required for certification**.
 
-- [ ] **Ensure Fanmaker opens in a full-screen sheet or modal**
+- [ ] **Fanmaker is opened with [`sdk.present()`](https://github.com/FanMaker/Turducken?tab=readme-ov-file#displaying-fanmaker-ui)**
+  - This satisfies the display and exit items below on its own: the SDK presents a
+    full-height sheet and closes itself
+  - Presenting the view controller yourself is still supported, but is no longer the
+    recommended integration — see [presenting it yourself](https://github.com/FanMaker/Turducken?tab=readme-ov-file#presenting-it-yourself-legacy)
 - [ ] **No primary app UI visible**
   - No wrapper, header, or logos from the primary app present  
     (Client branding is displayed prominently *inside* the SDK)
   - No primary app navigation visible when opening the Fanmaker SDK to avoid confusion or menu stacking
 - [ ] **Exit behavior implemented**
-  - Swipe-down gesture for sheets **or**
-  - [Close action handled](https://github.com/FanMaker/Turducken?tab=readme-ov-file#handling-sdk-close-actions)
+  - Handled for you by `sdk.present()` — iOS supplies the swipe-down, and the SDK
+    closes itself on the close action
+  - If you present it yourself: swipe-down gesture for sheets **or**
+    [close action handled](https://github.com/FanMaker/Turducken?tab=readme-ov-file#handling-sdk-close-actions)
 - [ ] **Background GPS permissions**
   - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#location-tracking)
   - Functioning as expected
@@ -138,11 +144,67 @@ struct MyApp: App {
 
 ### Displaying Fanmaker UI
 
-In order to show Fanmaker UI in your app, create an instance of `FanMakerSDKWebViewController` (`UIViewController` subclass) and use it as you find convenient.
-
-Fanmaker SDK also provides a `FanMakerSDKWebViewControllerRepresentable` wrapper which complies with `UIViewControllerRepresentable` protocol. For example, the following code is used to show it as a sheet modal when users press a button (which we recomend):
-
+```swift
+AppDelegate.fanmakerSDK1.present()
 ```
+
+That is the whole integration. The SDK finds the topmost view controller, presents
+the Fanmaker UI as a full-height sheet, and closes it again when the fan is done.
+There is no view controller to construct, no presentation style to choose, no
+`isShowing` state to keep in sync, and no dismissal to wire up.
+
+#### Why a sheet
+
+A sheet, not a full-screen modal, because iOS then supplies the way out — a grabber
+and a swipe-down. That matters more than it sounds: **Fanmaker's own login page does
+not draw a close button**, so a fan who opens the UI and decides not to sign in has
+no way out of a full-screen presentation. The sheet uses a single full-height detent,
+so the content still gets the whole screen.
+
+If your content is known to draw its own close control and you want edge-to-edge:
+
+```swift
+AppDelegate.fanmakerSDK1.presentationStyle = .fullScreen
+```
+
+Be deliberate about that one — it is the presentation a fan can get stuck in.
+
+#### Closing
+
+The SDK closes its own screen. You do not need to do anything.
+
+- Web content triggering the close action closes the sheet.
+- A fan swiping the sheet away closes it, and the SDK posts its close notification
+  with `params: ["source": "swipe"]` so you can still react.
+- Setting `FanMakerSDK.onClose` takes precedence, if you would rather handle closing
+  yourself. See [Handling SDK Close Actions](#handling-sdk-close-actions).
+
+#### The rest of the API
+
+- `present(from:)` — present from a view controller you name, for apps driving
+  several scenes.
+- `dismiss()` — close a screen `present()` put up, from your own code.
+- `isPresenting` — whether this instance currently has a screen on display.
+
+A second `present()` while a screen is already up is refused rather than stacking a
+copy, and returns `false`.
+
+### Presenting it yourself (legacy)
+
+> **Still fully supported, but no longer recommended.** New integrations should use
+> `sdk.present()` above. This path is the source of most integration problems we
+> see — it asks every host to solve presentation, hierarchy traversal, close
+> handling and dismissal for themselves, and each one solves it slightly
+> differently. We intend to keep it working for existing integrations, and to move
+> new ones onto the SDK-owned path. Expect it to be formally deprecated in a future
+> release; it will not be removed without notice and a migration path.
+
+Create an instance of `FanMakerSDKWebViewController` (a `UIViewController` subclass)
+and use it as you find convenient. The SDK also provides
+`FanMakerSDKWebViewControllerRepresentable`, which conforms to
+`UIViewControllerRepresentable`:
+
+```swift
 import SwiftUI
 import FanMaker
 
@@ -152,72 +214,35 @@ struct ContentView : View {
     var body : some View {
         Button("Show FanMaker UI", action: { isShowingFanMakerUI = true })
             .sheet(isPresented: $isShowingFanMakerUI) {
-                // FanMakerUI Display
                 FanMakerSDKWebViewControllerRepresentable(sdk: AppDelegate.fanmakerSDK1)
-                Button("Hide FanMakerUI", action: { isShowingFanMakerUI = false })
             }
     }
 }
 ```
 
-### Letting the SDK present itself (recommended)
+Two things to be aware of if you take this path:
 
-The SDK can put its own UI on screen and take it down again, so a host does not
-have to build, place, or dismiss anything:
+**The SDK still closes its own screen.** When web content triggers the close action
+and you have not set `onClose`, the SDK dismisses itself — handling all three ways
+you might have put it there: presented modally, pushed onto a navigation stack, or
+embedded as a child view controller. Earlier releases did nothing here, so if you
+wrote your own dismissal you can now delete it, or keep `onClose` set to retain
+control.
 
-```swift
-AppDelegate.fanmakerSDK1.present()
-```
-
-That is the whole integration. `present()` finds the topmost view controller and
-presents the FanMaker UI full screen, and the SDK closes it when web content
-triggers the close action. There is no view controller to construct, no
-presentation style to choose, and no `isShowing` state to keep in sync.
-
-Full screen is deliberate: NUX draws its own close affordance and its own
-branding, so SDK chrome on top would give a fan two close buttons, and a
-partial-height sheet would break the full-bleed presentation the checklist at
-the top of this README asks for.
-
-A few details worth knowing:
-
-- A second `present()` on the same instance while its screen is already up is
-  refused rather than stacking a copy a fan has to dismiss twice. `isPresenting`
-  tells you the current state, and the call returns `false` when it declines.
-- `present(from:)` takes a view controller if you would rather name one - useful
-  for an app driving several scenes.
-- `dismiss()` closes a screen `present()` put up, for closing the UI from your
-  own code. Web content triggering close already unwinds itself.
-
-**Presenting it yourself still works exactly as before.** Construct
-`FanMakerSDKWebViewController`, or use
-`FanMakerSDKWebViewControllerRepresentable` in SwiftUI, as documented above.
-Nothing here is required.
-
-### The SDK now closes its own screen
-
-When web content triggers the close action and you have **not** set
-`FanMakerSDK.onClose`, the SDK closes the screen itself. It handles all three
-ways a host might have put it there: presented modally, pushed onto a navigation
-stack, or embedded as a child view controller.
-
-Previously nothing on iOS dismissed anything — the close action called your
-`onClose` handler and posted notifications, and if you had not wired one up the
-fan was left on the page with no way out. This matches what the Android SDK
-already does with its own activity.
-
-Setting `onClose` still takes precedence, so if you need to run your own logic —
-or dismiss a container of your own — nothing changes for you.
-
-> **If you use SwiftUI `.sheet(isPresented:)`**, prefer `present()` over a sheet.
-> When the SDK dismisses itself out of a sheet that SwiftUI owns, your
-> `isPresented` binding can stay `true`, which leaves SwiftUI thinking the sheet
-> is still up and quietly blocks the next open. Letting the SDK present means
-> SwiftUI never holds that flag.
+**SwiftUI `.sheet(isPresented:)` and self-closing do not mix cleanly.** When the SDK
+dismisses itself out of a sheet that SwiftUI owns, your `isPresented` binding can
+stay `true` — SwiftUI still believes the sheet is up, which quietly blocks the next
+open. Either set `onClose` and flip the binding yourself, or use `sdk.present()`,
+where SwiftUI never holds the flag. This is the clearest case for moving over.
 
 ### Handling SDK Close Actions
 
-The Fanmaker SDK provides two ways to handle when the SDK UI is closed by the user:
+> **Optional as of this release.** The SDK closes its own screen, so you no longer
+> have to handle the close action to give a fan a way out. Set `onClose` only if you
+> want to run your own logic on close, or need to dismiss a container of your own —
+> setting it means the SDK stops closing its own screen and hands that job to you.
+
+The Fanmaker SDK provides two ways to observe or handle the SDK UI being closed:
 
 #### Option 1: Closure-Based Callback (Single Listener)
 
