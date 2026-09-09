@@ -112,7 +112,18 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                             }
                         }
                     } else {
-                        NSLog("FanMaker determined that CLLocationManager.locationServices are DISABLED")
+                        // This branch used to only log. JS saw pure silence and
+                        // waited out NUX's whole retry cycle - five attempts at
+                        // ten second intervals, ~50s - before falling back to
+                        // navigator.geolocation. Answering false turns that
+                        // hang into an immediate, correct answer; NUX already
+                        // handles authorized == false, and the failure branch
+                        // just above reports it the same way.
+                        let reason = !self.sdk.locationEnabled
+                            ? "location tracking is disabled on the SDK instance"
+                            : "CLLocationManager.locationServicesEnabled() is false"
+                        NSLog("FanMaker cannot provide a location: \(reason)")
+                        self.fanmaker!.webView.evaluateJavaScript("FanMakerReceiveLocationAuthorization(false)")
                     }
                 case "returnSDKInformation":
                     if let value = value as? String {
