@@ -14,7 +14,7 @@ import SwiftUI
 open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
     let sdk: FanMakerSDK
 
-    init(sdk: FanMakerSDK) {
+    public init(sdk: FanMakerSDK) {
         self.sdk = sdk
         super.init(nibName: nil, bundle: nil)
     }
@@ -176,8 +176,18 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                         }
                         // Special handling for "close" action (backward compatibility)
                         else if actionValue == "close" {
-                            // Call closure-based callback if set
-                            self.sdk.onClose?(params)
+                            // Same rule as Android: an integrator's own handler
+                            // wins, and when there isn't one the SDK closes its
+                            // own screen rather than leaving it on top of the
+                            // host app with nothing listening. Before this,
+                            // nothing on iOS dismissed anything - every
+                            // integration had to wire that up itself, and the
+                            // ones that did not left fans stuck on the page.
+                            if let onClose = self.sdk.onClose {
+                                onClose(params)
+                            } else {
+                                self.dismissSelf()
+                            }
                         }
 
                         // Post notification for all actions (supports multiple listeners)
@@ -263,6 +273,51 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                 }
             }
         }
+    }
+}
+
+@available(iOS 13.0, *)
+extension FanMakerSDKWebViewController {
+    /// Closes this screen, whichever way the host put it on screen.
+    ///
+    /// A host can present the SDK modally, push it onto a navigation stack, or
+    /// embed it as a child view controller, and each needs a different call to
+    /// undo. Rather than assume one, this asks the controller how it is
+    /// contained and unwinds that.
+    ///
+    /// Called when web content triggers the close action and the integrator has
+    /// not set `FanMakerSDK.onClose`.
+    public func dismissSelf(animated: Bool = true) {
+        // Always on the main thread; this can arrive from a WKScriptMessage.
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { self.dismissSelf(animated: animated) }
+            return
+        }
+
+        if isBeingDismissed { return }
+
+        if presentingViewController != nil {
+            dismiss(animated: animated)
+            return
+        }
+
+        if let navigation = navigationController, navigation.viewControllers.count > 1 {
+            navigation.popViewController(animated: animated)
+            return
+        }
+
+        if parent != nil {
+            willMove(toParent: nil)
+            view.removeFromSuperview()
+            removeFromParent()
+            return
+        }
+
+        // Nothing owns this controller in a way we can unwind - a host that
+        // installed it as a window's root, for instance. Say so rather than
+        // failing silently, since from a fan's point of view the close button
+        // did nothing.
+        NSLog("FanMaker: close requested but this screen is not presented, pushed or embedded, so the SDK cannot dismiss it. Set FanMakerSDK.onClose to handle closing yourself.")
     }
 }
 

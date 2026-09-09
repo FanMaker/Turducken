@@ -505,4 +505,161 @@ public class FanMakerSDK {
     public func updateSessionToken(_ tokenString: String) {
         self.userDefaults?.set(tokenString, forKey: self.FanMakerSDKSessionToken)
     }
+
+    // MARK: - Presenting the FanMaker UI
+
+    /// The screen this instance currently has on display, if any. Weak, so a
+    /// screen the host tore down itself cannot keep this instance believing it
+    /// is still showing something.
+    private weak var presentedScreen: FanMakerSDKWebViewController?
+
+    /// Whether this instance currently has a FanMaker screen on display.
+    public var isPresenting: Bool {
+        guard let screen = presentedScreen else { return false }
+        // Deliberately not checking that the view is in a window: a screen that
+        // is still animating in is presented as far as a second present() call
+        // is concerned, and that is the case worth refusing.
+        return !screen.isBeingDismissed
+            && (screen.presentingViewController != nil || screen.parent != nil)
+    }
+
+    /// Puts the FanMaker UI on screen, full screen, without the host having to
+    /// build or place anything.
+    ///
+    /// A host previously had to construct a view controller, decide how to
+    /// present it, and wire up dismissing it, which is most of the setup that
+    /// integrations get wrong. This is the counterpart of what the Android SDK
+    /// already does with its own activity: hand over one call and let the SDK
+    /// own the screen for its whole life, closing included.
+    ///
+    /// Presented full screen deliberately. NUX draws its own close affordance
+    /// and its own branding, so SDK chrome on top would give a fan two close
+    /// buttons, and a partial-height sheet would break the full-bleed
+    /// presentation the integration checklist asks for.
+    ///
+    /// Returns false when there was nowhere to present from, or when this
+    /// instance already has a screen up - the same one-screen-per-instance rule
+    /// the Android SDK applies per key, so a double tap cannot stack two
+    /// copies a fan then has to dismiss twice.
+    ///
+    /// Hosts that need to own presentation themselves can keep doing so:
+    /// construct `FanMakerSDKWebViewController`, or use
+    /// `FanMakerSDKWebViewControllerRepresentable` in SwiftUI, exactly as
+    /// before. Nothing here is required.
+    @available(iOS 13.0, *)
+    @discardableResult
+    public func present(animated: Bool = true, completion: (() -> Void)? = nil) -> Bool {
+        if !Thread.isMainThread {
+            var result = false
+            DispatchQueue.main.sync {
+                result = self.present(animated: animated, completion: completion)
+            }
+            return result
+        }
+
+        if !isInitialized() {
+            NSLog("FanMaker cannot present: initialize(apiKey:) has not been called yet")
+            return false
+        }
+
+        if isPresenting {
+            NSLog("FanMaker is already presenting a screen for this instance; ignoring the request")
+            return false
+        }
+
+        guard let host = FanMakerSDK.topmostViewController() else {
+            NSLog("FanMaker cannot present: no visible view controller to present from")
+            return false
+        }
+
+        return present(from: host, animated: animated, completion: completion)
+    }
+
+    /// Puts the FanMaker UI on screen from a view controller you name.
+    ///
+    /// `present()` finds the topmost controller itself, which is what most
+    /// hosts want. This is for the cases where that guess is wrong - an app
+    /// driving several scenes, or one that wants the UI to come from a specific
+    /// place in its hierarchy.
+    @available(iOS 13.0, *)
+    @discardableResult
+    public func present(
+        from host: UIViewController,
+        animated: Bool = true,
+        completion: (() -> Void)? = nil
+    ) -> Bool {
+        if !Thread.isMainThread {
+            var result = false
+            DispatchQueue.main.sync {
+                result = self.present(from: host, animated: animated, completion: completion)
+            }
+            return result
+        }
+
+        if !isInitialized() {
+            NSLog("FanMaker cannot present: initialize(apiKey:) has not been called yet")
+            return false
+        }
+
+        if isPresenting {
+            NSLog("FanMaker is already presenting a screen for this instance; ignoring the request")
+            return false
+        }
+
+        let screen = FanMakerSDKWebViewController(sdk: self)
+        screen.modalPresentationStyle = .fullScreen
+        presentedScreen = screen
+        host.present(screen, animated: animated, completion: completion)
+        return true
+    }
+
+    /// Closes a screen this instance put on display with `present()`.
+    ///
+    /// Only needed by a host that wants to close the UI from its own code;
+    /// web content triggering the close action already unwinds itself.
+    @available(iOS 13.0, *)
+    public func dismiss(animated: Bool = true) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { self.dismiss(animated: animated) }
+            return
+        }
+        presentedScreen?.dismissSelf(animated: animated)
+        presentedScreen = nil
+    }
+
+    /// The view controller a new screen should be presented from: the deepest
+    /// thing already on display, so the FanMaker UI lands on top of whatever
+    /// the fan is currently looking at rather than underneath it.
+    @available(iOS 13.0, *)
+    private static func topmostViewController() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+
+        // Prefer the active scene's key window. UIWindowScene.keyWindow is
+        // iOS 15 and up, and this package supports iOS 13, so the key window is
+        // found by asking the windows themselves.
+        let orderedWindows =
+            scenes.filter { $0.activationState == .foregroundActive }.flatMap { $0.windows }
+            + scenes.flatMap { $0.windows }
+
+        let root = orderedWindows.first(where: { $0.isKeyWindow })?.rootViewController
+            ?? orderedWindows.first(where: { !$0.isHidden })?.rootViewController
+
+        guard var candidate = root else { return nil }
+
+        // Walk past anything already presented, and into containers, so we do
+        // not try to present from a controller that is not actually visible.
+        while true {
+            if let presented = candidate.presentedViewController, !presented.isBeingDismissed {
+                candidate = presented
+            } else if let navigation = candidate as? UINavigationController,
+                      let top = navigation.visibleViewController {
+                candidate = top
+            } else if let tabs = candidate as? UITabBarController,
+                      let selected = tabs.selectedViewController {
+                candidate = selected
+            } else {
+                return candidate
+            }
+        }
+    }
 }
