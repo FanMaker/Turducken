@@ -827,6 +827,51 @@ Location (required)
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>By sharing your location you can earn points for checking in to certain events. You may also receive exclusive offers and additional point earning opportunities based on your location</string>
 ```
+## Signing a fan out, and identifier persistence
+
+### Call `logout()` on sign-out
+
+```
+fanMakerSDK?.logout()
+```
+
+`logout()` forgets the fan completely: every identifier, the FanMaker session
+token, and the auto-login user token.
+
+**Use `logout()`, not `clearIdentifiers()`.** Clearing identifiers is not a
+sign-out. The session token is what actually authenticates the fan, so clearing
+only the identifiers leaves the next person to open the webview logged in as the
+previous fan, whatever the identifiers say. `clearIdentifiers()` remains
+available for the narrower job its name describes, and `clearSessionToken()`
+does the token half alone — useful for forcing a re-authentication while keeping
+the identifiers that make one possible.
+
+### Identifiers you set now survive process death
+
+Identifiers set through `setUserID`, `setMemberID`, `setStudentID`,
+`setTicketmasterID`, `setYinzid`, `setPushNotificationToken` and
+`setFanMakerIdentifiers` are now persisted and restored on the next launch.
+Previously only identifiers arriving from the web content were stored, so a host
+that set them once at login silently stopped sending them from the next cold
+start onward.
+
+They are restored whether or not a session token is present. Identifiers are the
+*input* to authentication — the SDK posts them to `/site/auth/auto_login` when
+the webview opens — so a returning fan whose token has gone is exactly the case
+that needs them back. Restoration used to be gated on an existing token, which
+had it backwards and suppressed the auto-login it was meant to protect.
+
+Because persistence means process death is no longer an implicit reset, the
+`logout()` call above is what ends a session.
+
+### A fix worth knowing about if you use arbitrary identifiers
+
+`fanmaker_identifiers` was decoded as base64 `Data` rather than as the nested
+JSON object it is, so it threw whenever it was present — and the error was
+swallowed, which dropped **every** identifier in the payload rather than just
+that one. If you pass arbitrary identifiers and have seen identifiers go missing
+after a relaunch, this was why.
+
 ## :warning: BREAKING CHANGES IN 2.0 :warning:
 Version 2.0 of the FanMakerSDK has changed from static to instanced based initializtion. This means that you will need to modify your implementation to avoid service interruptions in this version. Previous versions of the SDK are no longer available for instalation. Support for SDK versions 1.x will be depreciated on December 20th, 2024, afterwords non version 2.0 + will cease to function.
 
