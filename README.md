@@ -942,6 +942,39 @@ AppDelegate.fanmakerSDK1.enableLocationTracking()
 AppDelegate.fanmakerSDK2.enableLocationTracking()
 ```
 
+#### Checking your beacon setup
+
+Every stage of beacon tracking writes an `NSLog` line prefixed `FanMaker (Beacons):`,
+so you can confirm a setup from Xcode's console or `Console.app` without instrumenting
+anything. Filter on that prefix and you should see, in order:
+
+```
+FanMaker (Beacons): Monitoring for beacon region UUID: 2686F39C-… Major: 1
+FanMaker (Beacons): ENTER region 1705 'Kyle Field - NE Tower' (UUID: 2686f39c-… Major 1) via didDetermineState
+FanMaker (Beacons): RANGING STARTED for region 1705 'Kyle Field - NE Tower' (…). Beacon sightings will be logged as they arrive.
+FanMaker (Beacons): RANGED beacon 2686F39C-… major 1 minor 0 [rssi -72, proximity near, accuracy 1.4] - recording
+FanMaker (Beacons): ENTER recorded for region 1705 'Kyle Field - NE Tower'
+FanMaker (Beacons): 1 beacon range actions successfully posted
+```
+
+Reading the gaps is usually enough to place the problem:
+
+| You see | Meaning |
+| --- | --- |
+| No `Monitoring for beacon region` lines | `startScanning` was never reached. Check authorization, and that your host calls the SDK at all — this is the most common integration miss. |
+| `Monitoring…` but no `ENTER` | The device is not inside any configured region. Check the UUID, major and minor against the region set up for your site. |
+| `ENTER` but no `RANGING STARTED` | The region is missing a major value, so no ranging constraint can be built. |
+| `RANGING STARTED` but no `RANGED` | The radio is listening and hearing nothing. Usually the beacon is off, out of range, or advertising a different UUID. |
+| `RANGED … holding off until the 60s uniqueness throttle clears` | Working as intended. The beacon is being seen; repeat sightings are suppressed for the site's uniqueness throttle. Each beacon announces its first sighting regardless, so you always get confirmation. |
+| `RANGED … recording` but no `beacon range actions successfully posted` | The sightings are being captured but not reaching us. Look at connectivity and the session token. |
+
+Ranging does not depend on the network or on your delegate. It starts the moment a
+region is entered and stops the moment it is exited, so a failed request or an unset
+`FanMakerSDKBeaconsManagerDelegate` cannot cost you the sightings for a visit.
+Earlier releases gated both on a successful `beacon_region_actions` request *and* a
+non-nil delegate, which meant an integration that never assigned one recorded nothing
+at all while appearing correctly configured.
+
 ### Recomended Entitlements
 
 Bluetooth (required for beacons)
