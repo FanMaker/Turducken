@@ -167,11 +167,20 @@ public class FanMakerSDK {
         self.locationEnabled = true // As of 2.0.3, we are making location enabled by default to help some clients with location tracking setup
         self.userDefaults = FanMakerSDKUserDefaults(sdk: self)
 
+        // Identifiers are restored whether or not a session token is present.
+        //
+        // They used to be restored only alongside a live token, which had it
+        // backwards: identifiers are the *input* to authentication, not a
+        // product of it. loginUserFromParams posts them to
+        // /site/auth/auto_login and FanMakerSDKWebView calls it on every open,
+        // so gating them on an existing token suppressed the exact flow that
+        // obtains one - a returning fan whose token had gone could not be
+        // auto-logged in from identifiers already sitting on the device.
+        //
+        // Ending a session is now an explicit act: see logout().
         let defaults = self.userDefaults
-        if defaults?.string(forKey: self.FanMakerSDKSessionToken) != nil && defaults?.string(forKey: self.FanMakerSDKSessionToken) != "" {
-            if let json = defaults?.string(forKey: self.FanMakerSDKJSONIdentifiers) {
-                self.setIdentifiers(fromJSON: json)
-            }
+        if let json = defaults?.string(forKey: self.FanMakerSDKJSONIdentifiers), !json.isEmpty {
+            self.setIdentifiers(fromJSON: json)
         }
 
         NotificationCenter.default.addObserver(self, selector: #selector(didFinishLaunching), name: UIApplication.didFinishLaunchingNotification, object: nil)
@@ -334,26 +343,32 @@ public class FanMakerSDK {
 
     public func setUserID(_ value : String) {
         self.userID = value
+        persistIdentifiers()
     }
 
     public func setMemberID(_ value : String) {
         self.memberID = value
+        persistIdentifiers()
     }
 
     public func setStudentID(_ value : String) {
         self.studentID = value
+        persistIdentifiers()
     }
 
     public func setTicketmasterID(_ value : String) {
         self.ticketmasterID = value
+        persistIdentifiers()
     }
 
     public func setYinzid(_ value : String) {
         self.yinzid = value
+        persistIdentifiers()
     }
 
     public func setPushNotificationToken(_ value : String) {
         self.pushToken = value
+        persistIdentifiers()
     }
 
     public func setFanMakerIdentifiers(dictionary: [String: Any] = [:]) -> [String: Any] {
@@ -364,6 +379,7 @@ public class FanMakerSDK {
         }
 
         self.fanmakerIdentifierLexicon = idLexicon
+        persistIdentifiers()
 
         return self.fanmakerIdentifierLexicon as? [String: Any] ?? [:]
     }
@@ -504,8 +520,13 @@ public class FanMakerSDK {
             if identifiers.ticketmaster_id != nil { self.setTicketmasterID(identifiers.ticketmaster_id!) }
             if identifiers.yinzid != nil { self.setYinzid(identifiers.yinzid!) }
             if identifiers.push_token != nil { self.setPushNotificationToken(identifiers.push_token!) }
-            if identifiers.fanmaker_identifiers != nil { self.setFanMakerIdentifiers(dictionary: identifiers.fanmaker_identifiers!) }
-        } catch { }
+            if identifiers.fanmaker_identifiers != nil { _ = self.setFanMakerIdentifiers(dictionary: identifiers.fanmaker_identifiers!) }
+        } catch {
+            // This used to be silent, which is how a decoding bug in
+            // fanmaker_identifiers went unnoticed while dropping every
+            // identifier alongside it.
+            NSLog("FanMaker could not read identifiers: \(error)")
+        }
     }
 
     // MARK: - Session Token Persistence
@@ -721,5 +742,80 @@ public class FanMakerSDK {
                 return candidate
             }
         }
+    }
+
+    // MARK: - Identifier Persistence
+
+    /// Writes the current identifier set to the same UserDefaults blob the web
+    /// bridge writes, so there is one persisted representation and one restore
+    /// path rather than two schemes that can disagree.
+    ///
+    /// Identifiers supplied by a host used to be memory-only: only the ones
+    /// arriving from the web bridge were persisted, so a host that set them
+    /// once at login silently stopped sending them from the next cold start.
+    private func persistIdentifiers() {
+        guard let defaults = self.userDefaults else { return }
+
+        var payload: [String: Any] = [:]
+        if !self.userID.isEmpty { payload["user_id"] = self.userID }
+        if !self.memberID.isEmpty { payload["member_id"] = self.memberID }
+        if !self.studentID.isEmpty { payload["student_id"] = self.studentID }
+        if !self.ticketmasterID.isEmpty { payload["ticketmaster_id"] = self.ticketmasterID }
+        if !self.yinzid.isEmpty { payload["yinzid"] = self.yinzid }
+        if !self.pushToken.isEmpty { payload["push_token"] = self.pushToken }
+        if !self.fanmakerIdentifierLexicon.isEmpty {
+            payload["fanmaker_identifiers"] = self.fanmakerIdentifierLexicon
+        }
+
+        if payload.isEmpty {
+            defaults.set("", forKey: self.FanMakerSDKJSONIdentifiers)
+            return
+        }
+
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else {
+            NSLog("FanMaker could not persist identifiers; leaving the stored copy alone")
+            return
+        }
+
+        defaults.set(json, forKey: self.FanMakerSDKJSONIdentifiers)
+    }
+
+    // MARK: - Ending a Session
+
+    /// Forgets the fan completely: every identifier, the session token, and the
+    /// auto-login user token. This is what a host should call on sign-out.
+    ///
+    /// Clearing identifiers alone is not a sign-out. The session token is what
+    /// authenticates the fan, so leaving it behind means the next person to
+    /// open the webview arrives logged in as the previous one, whatever the
+    /// identifiers say.
+    public func logout() {
+        clearIdentifiers()
+        clearSessionToken()
+        NSLog("FanMaker logged out: identifiers and session token cleared")
+    }
+
+    /// Forgets the session token and the auto-login user token, leaving
+    /// identifiers in place so the next open can re-authenticate the same fan.
+    public func clearSessionToken() {
+        self.userDefaults?.set("", forKey: self.FanMakerSDKSessionToken)
+        self.fanmakerUserToken = [:]
+    }
+
+    /// Forgets every identifier, in memory and on disk.
+    ///
+    /// This does not end the session - see logout(), which is almost certainly
+    /// what a sign-out path wants.
+    public func clearIdentifiers() {
+        self.userID = ""
+        self.memberID = ""
+        self.studentID = ""
+        self.ticketmasterID = ""
+        self.yinzid = ""
+        self.pushToken = ""
+        self.fanmakerIdentifierLexicon = [:]
+        self.userDefaults?.set("", forKey: self.FanMakerSDKJSONIdentifiers)
     }
 }
