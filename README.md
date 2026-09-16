@@ -242,9 +242,37 @@ is refused rather than stacking a copy the fan then has to dismiss twice.
 > release; it will not be removed without notice and a migration path.
 
 Create an instance of `FanMakerSDKWebViewController` (a `UIViewController` subclass)
-and use it as you find convenient. The SDK also provides
-`FanMakerSDKWebViewControllerRepresentable`, which conforms to
-`UIViewControllerRepresentable`:
+and use it as you find convenient. Pick the form that matches your host app's UI
+framework:
+
+- **UIKit hosts** — instantiate `FanMakerSDKWebViewController(sdk:)` directly and
+  present it with UIKit's `present(_:animated:)`.
+- **SwiftUI hosts** — use `FanMakerSDKWebViewControllerRepresentable`, which conforms
+  to `UIViewControllerRepresentable`, inside `.sheet` / `.fullScreenCover`.
+
+> :warning: Do **not** bridge `FanMakerSDKWebViewControllerRepresentable` through
+> `UIHostingController` to present from a UIKit host. The SwiftUI lifecycle that
+> materializes the underlying controller can fail to fire in that configuration,
+> which leaves `viewDidLoad` unrun and any deep-link path stored on the SDK
+> unconsumed. UIKit hosts should construct the controller directly — or use
+> `sdk.present()`, which handles this for you.
+
+#### UIKit
+
+```swift
+import UIKit
+import FanMaker
+
+class MyViewController: UIViewController {
+    @objc func showFanMakerUI() {
+        let fanMakerUI = FanMakerSDKWebViewController(sdk: AppDelegate.fanmakerSDK1)
+        present(fanMakerUI, animated: true)
+    }
+}
+```
+
+#### SwiftUI
+
 
 ```swift
 import SwiftUI
