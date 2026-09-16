@@ -156,7 +156,31 @@ public class FanMakerSDK {
         if let base = baseURL, let baseHost = URL(string: base)?.host?.lowercased() {
             allowed.append(baseHost)
         }
+
+        // Fails OPEN when we know of no first-party hosts yet, which is the
+        // window between launch and site_details/sdk answering. Treating
+        // everything as external there would eject links we own, and this call
+        // decides whether to throw out a link a page we already trust asked us
+        // to follow - so not knowing has to mean "carry on as before".
+        if allowed.isEmpty { return false }
+
         return !allowed.contains(host)
+    }
+
+    /// True when `host` is somewhere the SDK is willing to load inside its own
+    /// webview: the site's own host, or one its `allowed_domains` names.
+    ///
+    /// Fails CLOSED, the opposite of `isExternalWebURL`, and the asymmetry is
+    /// deliberate. This decides whether to admit a destination handed to us
+    /// from outside - a push payload, a universal link - where not knowing has
+    /// to mean no.
+    private func isFirstPartyHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased(), !host.isEmpty else { return false }
+        if allowedDomains.contains(host) { return true }
+        if let base = baseURL, let baseHost = URL(string: base)?.host?.lowercased() {
+            return baseHost == host
+        }
+        return false
     }
 
     // Used for "Deep Linking"
@@ -167,19 +191,49 @@ public class FanMakerSDK {
             return false
         }
 
-        if host.lowercased() == "fanmaker" {
-            self.deepLinkPath = path
-
-            if let baseURL = self.baseURL,
-               let webView = self.currentWebView,
-               let composed = fanMakerComposeURL(baseURL: baseURL, deepLinkPath: path) {
-                webView.load(URLRequest(url: composed))
-            }
-
-            return true
+        guard canHandleUrl(url) else {
+            NSLog("FanMaker will not route \(url.absoluteString): not a first-party destination")
+            return false
         }
 
-        return false
+        self.deepLinkPath = path
+
+        if let baseURL = self.baseURL,
+           let webView = self.currentWebView,
+           let composed = fanMakerComposeURL(baseURL: baseURL, deepLinkPath: path) {
+            webView.load(URLRequest(url: composed))
+        }
+
+        return true
+    }
+
+    /// Queues `path` as the next destination inside the FanMaker webview, with
+    /// no hostname convention at all - `openPath("/store")` is enough.
+    ///
+    /// The escape hatch for a host that knows a link is ours and should not have
+    /// to encode that as a magic hostname, and for push payloads carrying a bare
+    /// path. Mirrors the Android SDK's call of the same name.
+    @discardableResult
+    public func openPath(_ path: String) -> Bool {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            NSLog("FanMaker openPath called with an empty path; ignoring")
+            return false
+        }
+
+        // A path must not carry a destination of its own. "//host/x" is
+        // protocol-relative rather than a path - it parses as an authority - so
+        // accepting it would let a caller point the webview at a host of their
+        // choosing. Same for anything with an explicit scheme; that is
+        // handleUrl's job, and it checks the host.
+        let components = URLComponents(string: trimmed)
+        if trimmed.hasPrefix("//") || components?.scheme != nil || components?.host != nil {
+            NSLog("FanMaker openPath expects a path such as /store, got something carrying a host or scheme: \(trimmed) (use handleUrl for a full URL)")
+            return false
+        }
+
+        self.deepLinkPath = trimmed.hasPrefix("/") ? trimmed : "/" + trimmed
+        return true
     }
 
     // Used for "Deep Linking"
@@ -191,10 +245,20 @@ public class FanMakerSDK {
             return false
         }
 
-        // we only accept links that are tailored for the SDK
-        // like: clientapp://fanmaker/...
-        if host.lowercased() == "fanmaker"{
+        // Legacy form: any scheme whose host is literally fanmaker, as in
+        // clientapp://fanmaker/... Kept working so existing integrations that
+        // shape their links this way do not have to change.
+        if host.lowercased() == "fanmaker" || host.lowercased() == "fanmaker.com" {
             return true
+        }
+
+        // A first-party web link - the site's own host or one of its allowed
+        // domains. This is the shape a push notification's destination actually
+        // arrives in, and it used to be rejected out of hand, so a link reached
+        // NUX only if whoever composed it happened to use the magic hostname.
+        let scheme = components?.scheme?.lowercased()
+        if scheme == "http" || scheme == "https" {
+            return isFirstPartyHost(host)
         }
 
         return false

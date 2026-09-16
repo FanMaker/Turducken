@@ -79,6 +79,44 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
         self.view = self.fanmaker!.webView
     }
 
+    /// Sends links that leave first-party territory to the system browser
+    /// instead of loading them in the SDK's webview.
+    ///
+    /// This used to be the host app's job: the SDK exposed `isExternalWebURL`
+    /// and left every integration to call it, which is the sort of setup that
+    /// gets skipped and then reported as a broken link. A partner or ticketing
+    /// page loaded inside the SDK webview has no browser chrome, no way back,
+    /// and none of the fan's existing session.
+    ///
+    /// Deliberately narrow about what counts. Only a link the fan actually
+    /// tapped, and a link asking for a new window, are ejected. Redirects,
+    /// form posts and subframes are left alone, because an SSO or payment flow
+    /// redirects *through* third-party hosts and has to come back - ejecting
+    /// those would hand the fan a browser mid-login and strand the session in
+    /// an app they have left. `isExternalWebURL` also fails open before
+    /// `site_details/sdk` has answered, so nothing is ejected while the
+    /// allowlist is still unknown.
+    public func webView(_ webView: WKWebView,
+                        decidePolicyFor navigationAction: WKNavigationAction,
+                        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.allow)
+            return
+        }
+
+        let opensANewWindow = navigationAction.targetFrame == nil
+        let fanTappedIt = navigationAction.navigationType == .linkActivated
+
+        guard fanTappedIt || opensANewWindow, self.sdk.isExternalWebURL(url) else {
+            decisionHandler(.allow)
+            return
+        }
+
+        NSLog("FanMaker handing \(url.absoluteString) to the system browser: not a first-party host")
+        decisionHandler(.cancel)
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+    }
+
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "fanmaker", let body = message.body as? Dictionary<String, Any> {
             let defaults = self.sdk.userDefaults

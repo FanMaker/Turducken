@@ -585,6 +585,44 @@ if !nonNilImages.isEmpty {
 }
 ```
 
+### Push Destinations and External Links
+
+The SDK decides for itself which links belong inside its webview and which belong
+in the system browser. You do not have to wire anything up for this.
+
+`site_details/sdk` returns the site's first-party hosts, which the SDK persists and
+restores on `initialize()` — so a **cold-start push tap can classify a link before
+the network has answered**, which is the case that actually breaks.
+
+**Routing a push destination.** Hand the SDK whatever the payload carried:
+
+```swift
+if AppDelegate.fanmakerSDK1.handleUrl(url) {
+    AppDelegate.fanmakerSDK1.present()   // ours - open it in the SDK
+}
+// returned false: not ours, handle it however your app normally would
+```
+
+`handleUrl(_:)` accepts the site's own host and any of its allowed domains, as well
+as the legacy `clientapp://fanmaker/...` shape. Earlier releases accepted **only**
+that magic hostname, so a push carrying an ordinary `https://` link to your own site
+was rejected. If your payload carries a bare path, use `openPath("/store")`, which
+needs no hostname convention at all.
+
+**Links inside the webview.** A link the fan taps that points somewhere not
+first-party is handed to the system browser automatically. Partner and ticketing
+pages need their own browser chrome and the fan's existing session, and have no way
+back when loaded inside an SDK webview.
+
+Only links the fan taps, and links asking for a new window, are ejected. Redirects,
+form posts and subframes are left alone on purpose: SSO and payment flows redirect
+*through* third-party hosts and have to come back, and ejecting those would hand the
+fan a browser mid-login. Nothing is ejected before `site_details/sdk` has answered,
+since the allowlist is not yet known.
+
+`isExternalWebURL(_:)` remains available if you want to ask the same question about a
+URL of your own.
+
 ### Deep Linking / Universal Links
 If you wish to link to something within the Fanmaker SDK, you need to setup your application to accept URL Scheme or Universal Links, or know the resource you are trying to access.
 
