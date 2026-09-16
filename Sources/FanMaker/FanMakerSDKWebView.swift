@@ -110,6 +110,7 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
             case .success(let response):
                 let baseURL = response.data.url
                 instanceSdk.updateBaseUrl(baseURL)
+                instanceSdk.updateAllowedDomains(response.data.allowed_domains ?? [])
 
                 var urlString: String
                 if let deepLinkPath = instanceSdk.deepLinkPath, !deepLinkPath.isEmpty,
