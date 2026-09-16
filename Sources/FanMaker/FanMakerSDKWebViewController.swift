@@ -36,7 +36,6 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
         configuration.userContentController = userController
 
         self.fanmaker = FanMakerSDKWebView(sdk: self.sdk, configuration: configuration)
-        self.fanmaker?.prepareUIView()
         self.fanmaker?.webView.navigationDelegate = self
 
         self.view = UIView(frame: self.view!.bounds)
@@ -64,6 +63,15 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                 spinner.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
                 spinner.centerYAnchor.constraint(equalTo: self.view.centerYAnchor)
             ])
+        }
+
+        // Started only once the loading screen is up. Site details, auto-login and
+        // token resolution all happen off the main thread; `webView(_:didFinish:)`
+        // swaps the webview in when the page lands.
+        self.fanmaker?.prepareUIView { loaded in
+            if !loaded {
+                NSLog("FanMaker Error: could not build the webview request - the loading screen will stay up")
+            }
         }
     }
 

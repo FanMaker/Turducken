@@ -255,7 +255,30 @@ public class FanMakerSDK {
         }
     }
 
+    /// Blocking form, kept for hosts that call it directly.
+    ///
+    /// Stalls the calling thread for up to 5 seconds — on the main thread that is a
+    /// visible freeze. Prefer `loginUserFromParams(completion:)`.
     public func loginUserFromParams() -> Bool {
+        let semaphore = DispatchSemaphore(value: 0)
+        var success = false
+
+        loginUserFromParams { result in
+            success = result
+            semaphore.signal()
+        }
+
+        // Wait for the request to complete
+        _ = semaphore.wait(timeout: .now() + 5.0)
+        return success
+    }
+
+    /// Logs the fan in from whatever identifiers are set, without blocking.
+    ///
+    /// `completion` runs on whichever thread the HTTP layer answers on, and reports
+    /// whether a user token was obtained. Answers `false` immediately when there are
+    /// no identifiers to send.
+    public func loginUserFromParams(completion: @escaping (Bool) -> Void) {
         // Create a dictionary with all user identifiers
         var identifiers: [String: Any] = [:]
 
@@ -273,17 +296,14 @@ public class FanMakerSDK {
 
         // Return early if there are no identifiers to send
         if identifiers.isEmpty {
-            return false
+            completion(false)
+            return
         }
 
-        // Create a semaphore to make the request synchronous
-        let semaphore = DispatchSemaphore(value: 0)
-        var success = false
-
         // Make the API request
-        
         FanMakerSDKHttp.post(sdk: self, path: "/site/auth/auto_login", body: identifiers, useSiteApiToken: true) { result in
             print("FanMaker ----------------------------------------- >> Auto Login Attempt")
+            var success = false
             switch result {
             case .success(let response):
                 print("FanMaker Status: \(response.status)")
@@ -293,24 +313,20 @@ public class FanMakerSDK {
                     if let tokenData = response.data as? [String: Any] {
                         self.fanmakerUserToken = tokenData
                         success = true
-                        print("FanMaker ✓ Auto login successful - token set")
+                        print("FanMaker \u{2713} Auto login successful - token set")
                     } else {
-                        print("FanMaker ✗ Auto login failed - invalid token data format")
+                        print("FanMaker \u{2717} Auto login failed - invalid token data format")
                     }
                 } else {
-                    print("FanMaker ✗ Auto login failed - non-200 status")
+                    print("FanMaker \u{2717} Auto login failed - non-200 status")
                 }
             case .failure(let error):
-                print("FanMaker ✗ Auto login failed with error: \(error)")
+                print("FanMaker \u{2717} Auto login failed with error: \(error)")
             }
             print("FanMaker ----------------------------------------- << Auto Login Attempt")
-            
-            semaphore.signal()
-        }
 
-        // Wait for the request to complete
-        _ = semaphore.wait(timeout: .now() + 5.0)
-        return success
+            completion(success)
+        }
     }
 
     public func isInitialized() -> Bool {
