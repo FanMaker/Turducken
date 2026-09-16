@@ -277,6 +277,24 @@ stay `true` — SwiftUI still believes the sheet is up, which quietly blocks the
 open. Either set `onClose` and flip the binding yourself, or use `sdk.present()`,
 where SwiftUI never holds the flag. This is the clearest case for moving over.
 
+**Loading no longer blocks the thread that presents it.** Resolving the site URL,
+running auto-login and refreshing the session token all happen off the main thread,
+and the SDK's loading screen is up while they do. Earlier releases did this work
+behind `DispatchSemaphore.wait()` inside `viewDidLoad`, so presenting the SDK froze
+the app for as long as those calls took — 350 ms on a good connection, longer on a
+venue network, and unbounded if the site-details call never answered. Nothing is
+required of you; a host that presents `FanMakerSDKWebViewController` simply stops
+paying that freeze.
+
+If you drive the lower-level `FanMakerSDKWebView` yourself, note that
+`prepareUIView()` still blocks by contract, because it is public and existing
+integrations call it. Prefer `prepareUIView(completion:)`, whose completion runs on
+the main thread once the request has been loaded. The same applies to
+`loginUserFromParams()`, which now has a non-blocking `loginUserFromParams(completion:)`
+counterpart. Constructing `FanMakerSDKWebView` no longer performs a network call at
+all, so a SwiftUI host embedding it directly will briefly see an empty webview where
+it previously saw a stalled interface.
+
 ### Handling SDK Close Actions
 
 > **Optional as of this release.** The SDK closes its own screen, so you no longer
