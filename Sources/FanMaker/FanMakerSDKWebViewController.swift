@@ -14,7 +14,7 @@ import SwiftUI
 open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
     let sdk: FanMakerSDK
 
-    init(sdk: FanMakerSDK) {
+    public init(sdk: FanMakerSDK) {
         self.sdk = sdk
         super.init(nibName: nil, bundle: nil)
     }
@@ -36,7 +36,6 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
         configuration.userContentController = userController
 
         self.fanmaker = FanMakerSDKWebView(sdk: self.sdk, configuration: configuration)
-        self.fanmaker?.prepareUIView()
         self.fanmaker?.webView.navigationDelegate = self
 
         self.view = UIView(frame: self.view!.bounds)
@@ -65,10 +64,57 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                 spinner.centerYAnchor.constraint(equalTo: self.view.centerYAnchor)
             ])
         }
+
+        // Started only once the loading screen is up. Site details, auto-login and
+        // token resolution all happen off the main thread; `webView(_:didFinish:)`
+        // swaps the webview in when the page lands.
+        self.fanmaker?.prepareUIView { loaded in
+            if !loaded {
+                NSLog("FanMaker Error: could not build the webview request - the loading screen will stay up")
+            }
+        }
     }
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation) {
         self.view = self.fanmaker!.webView
+    }
+
+    /// Sends links that leave first-party territory to the system browser
+    /// instead of loading them in the SDK's webview.
+    ///
+    /// This used to be the host app's job: the SDK exposed `isExternalWebURL`
+    /// and left every integration to call it, which is the sort of setup that
+    /// gets skipped and then reported as a broken link. A partner or ticketing
+    /// page loaded inside the SDK webview has no browser chrome, no way back,
+    /// and none of the fan's existing session.
+    ///
+    /// Deliberately narrow about what counts. Only a link the fan actually
+    /// tapped, and a link asking for a new window, are ejected. Redirects,
+    /// form posts and subframes are left alone, because an SSO or payment flow
+    /// redirects *through* third-party hosts and has to come back - ejecting
+    /// those would hand the fan a browser mid-login and strand the session in
+    /// an app they have left. `isExternalWebURL` also fails open before
+    /// `site_details/sdk` has answered, so nothing is ejected while the
+    /// allowlist is still unknown.
+    public func webView(_ webView: WKWebView,
+                        decidePolicyFor navigationAction: WKNavigationAction,
+                        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.allow)
+            return
+        }
+
+        let opensANewWindow = navigationAction.targetFrame == nil
+        let fanTappedIt = navigationAction.navigationType == .linkActivated
+
+        guard fanTappedIt || opensANewWindow, self.sdk.isExternalWebURL(url) else {
+            decisionHandler(.allow)
+            return
+        }
+
+        NSLog("FanMaker handing \(url.absoluteString) to the system browser: not a first-party host")
+        decisionHandler(.cancel)
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
 
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -112,7 +158,18 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                             }
                         }
                     } else {
-                        NSLog("FanMaker determined that CLLocationManager.locationServices are DISABLED")
+                        // This branch used to only log. JS saw pure silence and
+                        // waited out NUX's whole retry cycle - five attempts at
+                        // ten second intervals, ~50s - before falling back to
+                        // navigator.geolocation. Answering false turns that
+                        // hang into an immediate, correct answer; NUX already
+                        // handles authorized == false, and the failure branch
+                        // just above reports it the same way.
+                        let reason = !self.sdk.locationEnabled
+                            ? "location tracking is disabled on the SDK instance"
+                            : "CLLocationManager.locationServicesEnabled() is false"
+                        NSLog("FanMaker cannot provide a location: \(reason)")
+                        self.fanmaker!.webView.evaluateJavaScript("FanMakerReceiveLocationAuthorization(false)")
                     }
                 case "returnSDKInformation":
                     if let value = value as? String {
@@ -176,8 +233,18 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                         }
                         // Special handling for "close" action (backward compatibility)
                         else if actionValue == "close" {
-                            // Call closure-based callback if set
-                            self.sdk.onClose?(params)
+                            // Same rule as Android: an integrator's own handler
+                            // wins, and when there isn't one the SDK closes its
+                            // own screen rather than leaving it on top of the
+                            // host app with nothing listening. Before this,
+                            // nothing on iOS dismissed anything - every
+                            // integration had to wire that up itself, and the
+                            // ones that did not left fans stuck on the page.
+                            if let onClose = self.sdk.onClose {
+                                onClose(params)
+                            } else {
+                                self.dismissSelf()
+                            }
                         }
 
                         // Post notification for all actions (supports multiple listeners)
@@ -263,6 +330,83 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                 }
             }
         }
+    }
+}
+
+/// How the SDK puts the FanMaker UI on screen.
+public enum FanMakerSDKPresentationStyle {
+    /// A sheet at full height, with iOS's grabber and swipe to dismiss.
+    ///
+    /// The default, and the safe one: NUX draws no close button on its login
+    /// page, so a full screen presentation leaves a fan who does not want to
+    /// sign in with no way out.
+    case sheet
+
+    /// Edge to edge, with no way out other than a close control in the content
+    /// itself. Only appropriate where the content is known to draw one.
+    case fullScreen
+}
+
+@available(iOS 13.0, *)
+extension FanMakerSDKWebViewController: UIAdaptivePresentationControllerDelegate {
+    /// A fan swiping the sheet away never goes through the web content's close
+    /// action, so nothing would otherwise tell a host the UI had gone.
+    ///
+    /// This posts the close notification but deliberately does not invoke
+    /// `onClose`: that closure is a request to *perform* a dismissal, and the
+    /// dismissal has already happened here - calling it could send a host off
+    /// to dismiss a container of their own that is still meant to be up.
+    public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        NotificationCenter.default.post(
+            name: FanMakerSDK.closeSdk,
+            object: self.sdk,
+            userInfo: ["params": ["source": "swipe"]]
+        )
+    }
+}
+
+@available(iOS 13.0, *)
+extension FanMakerSDKWebViewController {
+    /// Closes this screen, whichever way the host put it on screen.
+    ///
+    /// A host can present the SDK modally, push it onto a navigation stack, or
+    /// embed it as a child view controller, and each needs a different call to
+    /// undo. Rather than assume one, this asks the controller how it is
+    /// contained and unwinds that.
+    ///
+    /// Called when web content triggers the close action and the integrator has
+    /// not set `FanMakerSDK.onClose`.
+    public func dismissSelf(animated: Bool = true) {
+        // Always on the main thread; this can arrive from a WKScriptMessage.
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { self.dismissSelf(animated: animated) }
+            return
+        }
+
+        if isBeingDismissed { return }
+
+        if presentingViewController != nil {
+            dismiss(animated: animated)
+            return
+        }
+
+        if let navigation = navigationController, navigation.viewControllers.count > 1 {
+            navigation.popViewController(animated: animated)
+            return
+        }
+
+        if parent != nil {
+            willMove(toParent: nil)
+            view.removeFromSuperview()
+            removeFromParent()
+            return
+        }
+
+        // Nothing owns this controller in a way we can unwind - a host that
+        // installed it as a window's root, for instance. Say so rather than
+        // failing silently, since from a fan's point of view the close button
+        // did nothing.
+        NSLog("FanMaker: close requested but this screen is not presented, pushed or embedded, so the SDK cannot dismiss it. Set FanMakerSDK.onClose to handle closing yourself.")
     }
 }
 

@@ -76,6 +76,25 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     var cachedRegions : [FanMakerSDKBeaconRegion] = []
     private let cachedRegionsQueue = DispatchQueue(label: "com.fanmaker.FanMakerSDK.cachedRegionsQueue")
 
+    // Region identifiers we have already treated as entered and not yet seen
+    // an exit for.
+    //
+    // Needed because there are now two ways in: a boundary crossing
+    // (didEnterRegion) and an initial state query (didDetermineState, .inside).
+    // A fan standing near a boundary when scanning starts can produce both for
+    // the same arrival, and postRegionAction has no de-duplication of its own -
+    // beaconUniquenessThrottle only governs range actions - so without this the
+    // second one posts a duplicate enter and starts ranging twice.
+    private var insideRegionIdentifiers = Set<String>()
+    private let insideRegionsQueue = DispatchQueue(label: "com.fanmaker.FanMakerSDK.insideRegionsQueue")
+
+    // Beacons ranged since scanning started, so the first sighting of each one can
+    // be logged even when the uniqueness throttle suppresses the recording. Without
+    // this an integrator who sets a 60s throttle sees nothing for a full minute and
+    // cannot tell a working beacon from a misconfigured one.
+    private var rangedBeaconIdentifiers = Set<String>()
+    private let rangedBeaconsQueue = DispatchQueue(label: "com.fanmaker.FanMakerSDK.rangedBeaconsQueue")
+
     private let FanMakerSDKBeaconRangeActionsHistory = "FanMakerSDKBeaconRangeActionsHistory"
     private let FanMakerSDKBeaconRangeActionsSendList = "FanMakerSDKBeaconRangeActionsSendList"
     private var timer : Timer?
@@ -153,7 +172,14 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     open func startScanning(_ regions: [FanMakerSDKBeaconRegion]) {
         stopScanning()
 
-        cachedRegionsQueue.async {
+        // Synchronous on purpose. requestState(for:) below can call back
+        // almost immediately, and didDetermineState checks getCachedRegion to
+        // decide whether a region is ours - so an async assignment here leaves
+        // a window where the initial state arrives before the cache is
+        // populated and is silently discarded, which is the exact case this
+        // change exists to catch. The queue is serial and no caller runs on
+        // it, so this cannot deadlock.
+        cachedRegionsQueue.sync {
             self.cachedRegions = regions
         }
         for region in regions {
@@ -168,6 +194,14 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
                 }
 
                 locationManager.startMonitoring(for: beaconRegion)
+
+                // startMonitoring only reports boundary *crossings*, so a fan
+                // already inside this region right now would never be told
+                // about it - and since ranging only starts on entry, they
+                // would produce no range actions either until they physically
+                // left and came back with the app running. Ask for the current
+                // state explicitly; the answer arrives at didDetermineState.
+                locationManager.requestState(for: beaconRegion)
             }
         }
     }
@@ -183,6 +217,14 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
         cachedRegionsQueue.async {
             self.cachedRegions.removeAll()
         }
+
+        insideRegionsQueue.sync {
+            self.insideRegionIdentifiers.removeAll()
+        }
+
+        rangedBeaconsQueue.sync {
+            self.rangedBeaconIdentifiers.removeAll()
+        }
     }
 
     open func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
@@ -192,25 +234,124 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
     }
 
     open func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
+        handleRegionEntered(manager, region: region, via: "didEnterRegion")
+    }
+
+    /// Reports the state of a region we asked about with `requestState(for:)`.
+    ///
+    /// This is the only way to learn that a fan was *already* inside a region
+    /// when scanning began; `startMonitoring` alone reports crossings only.
+    /// `.inside` is therefore treated exactly as an entry.
+    open func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
+        guard getCachedRegion(from: region.identifier) != nil else {
+            // Not one of ours - another part of the host app may be monitoring
+            // its own regions through a shared location manager.
+            return
+        }
+
+        switch state {
+        case .inside:
+            log("Already inside FanMaker beacon region at scan start: \(region.identifier)")
+            handleRegionEntered(manager, region: region, via: "didDetermineState")
+        case .outside:
+            // Clear any stale inside-ness so a later real crossing is not
+            // mistaken for a duplicate.
+            forgetInside(region.identifier)
+        case .unknown:
+            log("Could not determine state for FanMaker beacon region: \(region.identifier)")
+        @unknown default:
+            log("Unhandled region state for FanMaker beacon region: \(region.identifier)")
+        }
+    }
+
+    /// Shared entry path for both a boundary crossing and an initial `.inside`
+    /// determination. No-ops when we already consider ourselves inside, so the
+    /// two routes cannot post a duplicate enter or start ranging twice.
+    private func handleRegionEntered(_ manager: CLLocationManager, region: CLRegion, via source: String) {
         guard let fmRegion = getCachedRegion(from: region.identifier) else {
             log("NON-FanMaker beacon region. Halting FanMaker didEnterRegion for UUID: \(region.identifier)")
             return
         }
 
-        do {
-            try postRegionAction(region_identifier: region.identifier, action: "enter") { delegate, fmRegion in
-                delegate.beaconsManager(self, didEnterRegion: fmRegion)
-                self.log("Start ranging beacons for FanMaker Region \(fmRegion)")
-
-                if let constraint = fmRegion.constraint() {
-                    manager.startRangingBeacons(satisfying: constraint)
-                } else {
-                    self.log("ERROR: Cannot start raging for FanMaker Region because constraint is nil. FanMaker Region: \(fmRegion)")
-                }
-            }
-        } catch {
-            log("\(error)")
+        guard markInside(region.identifier) else {
+            log("Already inside \(region.identifier); ignoring duplicate enter from \(source)")
+            return
         }
+
+        log("ENTER region \(fmRegion.id) '\(fmRegion.name)' (\(fmRegion)) via \(source)")
+
+        // Ranging is a local radio operation, so it starts here rather than from
+        // the POST's completion. Gating it on the network meant a failed enter
+        // POST cost us every range action for the visit, with no retry.
+        startRanging(for: fmRegion, with: manager)
+
+        postRegionAction(region_identifier: region.identifier, action: "enter") { delegate, fmRegion in
+            delegate?.beaconsManager(self, didEnterRegion: fmRegion)
+        } onFailure: {
+            // Let a later didDetermineState retry the enter. Ranging is already
+            // running, so this only concerns the missing beacon_region_actions row.
+            self.forgetInside(region.identifier)
+            self.log("ENTER not recorded for region \(fmRegion.id); will retry if iOS reports this region again. Ranging continues.")
+        }
+    }
+
+    /// Starts ranging for `fmRegion`, or says why it cannot.
+    private func startRanging(for fmRegion: FanMakerSDKBeaconRegion, with manager: CLLocationManager) {
+        guard let constraint = fmRegion.constraint() else {
+            log("ERROR: Cannot start ranging for FanMaker Region because constraint is nil. FanMaker Region: \(fmRegion)")
+            return
+        }
+        manager.startRangingBeacons(satisfying: constraint)
+        log("RANGING STARTED for region \(fmRegion.id) '\(fmRegion.name)' (\(fmRegion)). Beacon sightings will be logged as they arrive.")
+    }
+
+    /// Stops ranging for `fmRegion`, or says why it cannot.
+    private func stopRanging(for fmRegion: FanMakerSDKBeaconRegion, with manager: CLLocationManager) {
+        guard let constraint = fmRegion.constraint() else {
+            log("ERROR: Cannot stop ranging for FanMaker Region because constraint is nil. FanMaker Region: \(fmRegion)")
+            return
+        }
+        manager.stopRangingBeacons(satisfying: constraint)
+        log("RANGING STOPPED for region \(fmRegion.id) '\(fmRegion.name)' (\(fmRegion))")
+    }
+
+    /// Records `identifier` as inside. Returns false when it already was, in
+    /// which case the caller should do nothing.
+    @discardableResult
+    internal func markInside(_ identifier: String) -> Bool {
+        return insideRegionsQueue.sync {
+            self.insideRegionIdentifiers.insert(identifier).inserted
+        }
+    }
+
+    /// Returns true when `identifier` was recorded as inside and is no longer.
+    @discardableResult
+    internal func forgetInside(_ identifier: String) -> Bool {
+        return insideRegionsQueue.sync {
+            self.insideRegionIdentifiers.remove(identifier) != nil
+        }
+    }
+
+    /// Region identifiers currently considered entered. Exposed for tests.
+    internal var currentlyInsideRegionIdentifiers: Set<String> {
+        return insideRegionsQueue.sync { self.insideRegionIdentifiers }
+    }
+
+    /// Records that a beacon has been ranged. Returns true the first time each
+    /// beacon is seen since scanning started.
+    @discardableResult
+    internal func markRanged(_ action: FanMakerSDKBeaconRangeAction) -> Bool {
+        let identifier = "\(action.uuid)::\(action.major)::\(action.minor)"
+        return rangedBeaconsQueue.sync {
+            self.rangedBeaconIdentifiers.insert(identifier).inserted
+        }
+    }
+
+    /// A one-line description of a sighting, for the logs an integrator reads when
+    /// working out whether their beacons are configured correctly.
+    internal func describe(_ action: FanMakerSDKBeaconRangeAction) -> String {
+        return "beacon \(action.uuid) major \(action.major) minor \(action.minor)"
+            + " [rssi \(action.rssi), proximity \(action.proximity), accuracy \(action.accuracy)]"
     }
 
     open func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
@@ -220,19 +361,22 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
             return
         }
 
-        do {
-            try postRegionAction(region_identifier: region.identifier, action: "exit") { delegate, fmRegion in
-                delegate.beaconsManager(self, didExitRegion: fmRegion)
-                self.log("Stop ranging beacons for FanMaker Region \(fmRegion)")
+        // An exit we were never inside for is not worth posting, and would
+        // otherwise let a stray exit produce an unpaired action.
+        guard forgetInside(region.identifier) else {
+            log("Exit for a region we were not inside; ignoring: \(region.identifier)")
+            return
+        }
 
-                if let constraint = fmRegion.constraint() {
-                    manager.stopRangingBeacons(satisfying: constraint)
-                } else {
-                    self.log("ERROR: Cannot stop ranging for FanMaker Region because constraint is nil. FanMaker Region: \(fmRegion)")
-                }
-            }
-        } catch {
-            log("\(error)")
+        log("EXIT region \(fmRegion.id) '\(fmRegion.name)' (\(fmRegion))")
+
+        // Stopped here rather than from the POST's completion. When the exit POST
+        // failed we used to keep ranging a region the fan had already left,
+        // burning the radio and posting sightings for somewhere they were not.
+        stopRanging(for: fmRegion, with: manager)
+
+        postRegionAction(region_identifier: region.identifier, action: "exit") { delegate, fmRegion in
+            delegate?.beaconsManager(self, didExitRegion: fmRegion)
         }
     }
 
@@ -243,9 +387,16 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
 
         for beacon in beacons {
             let beaconRangeAction = FanMakerSDKBeaconRangeAction(beacon: beacon)
+            // Marked before the throttle check so a beacon that is in range but
+            // suppressed still announces itself once.
+            let isFirstSighting = markRanged(beaconRangeAction)
+
             if shouldAppend(beaconRangeAction, to: queue) {
                 queue.append(beaconRangeAction)
                 newActions.append(beaconRangeAction)
+                log("RANGED \(describe(beaconRangeAction)) - recording")
+            } else if isFirstSighting {
+                log("RANGED \(describe(beaconRangeAction)) - in range, holding off until the \(sdk.beaconUniquenessThrottle)s uniqueness throttle clears")
             }
         }
 
@@ -293,7 +444,17 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
         NSLog("FanMaker (Beacons): \(message)")
     }
 
-    private func postRegionAction(region_identifier: String, action: String, onCompletion: @escaping (FanMakerSDKBeaconsManagerDelegate, FanMakerSDKBeaconRegion) -> Void) {
+    /// Records a region action server-side and notifies the delegate.
+    ///
+    /// `onCompletion` takes an optional delegate on purpose: the whole body used to
+    /// sit inside `if let delegate = self.delegate`, so an integration that never
+    /// set a delegate - or whose delegate had been deallocated, it being `weak` -
+    /// silently got no ranging at all even when every POST succeeded. That looked
+    /// like broken beacons rather than a missed integration step.
+    private func postRegionAction(region_identifier: String,
+                                  action: String,
+                                  onCompletion: @escaping (FanMakerSDKBeaconsManagerDelegate?, FanMakerSDKBeaconRegion) -> Void,
+                                  onFailure: (() -> Void)? = nil) {
         guard let fmRegion = getCachedRegion(from: region_identifier) else {
             log("\(action.uppercased()) NON-FanMaker beacon region. Halting FanMaker postRegionAction for UUID: \(region_identifier)")
             return
@@ -305,15 +466,15 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
         ]
 
         FanMakerSDKHttp.post(sdk: self.sdk, path: "beacon_region_actions", body: body) { result in
-            if let delegate = self.delegate {
-                switch(result) {
-                case .success:
-                    onCompletion(delegate, fmRegion)
-                case .failure(let error):
-                    delegate.beaconsManager(self, didFailWithError: .serverError)
-                    self.log("Server error POSTing \(action.uppercased()) FanMaker Beacon")
-                    self.log("UUID: \(fmRegion.uuid)")
-                }
+            switch(result) {
+            case .success:
+                self.log("\(action.uppercased()) recorded for region \(fmRegion.id) '\(fmRegion.name)'")
+                onCompletion(self.delegate, fmRegion)
+            case .failure(let error):
+                self.log("Server error POSTing \(action.uppercased()) FanMaker Beacon: \(error.localizedDescription)")
+                self.log("UUID: \(fmRegion.uuid)")
+                self.delegate?.beaconsManager(self, didFailWithError: .serverError)
+                onFailure?()
             }
         }
     }

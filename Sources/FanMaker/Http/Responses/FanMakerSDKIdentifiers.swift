@@ -35,10 +35,43 @@ public struct FanMakerSDKIdentifiers: Decodable, @unchecked Sendable {
         yinzid = try container.decodeIfPresent(String.self, forKey: .yinzid)
         push_token = try container.decodeIfPresent(String.self, forKey: .push_token)
 
-        if let identifiersData = try container.decodeIfPresent(Data.self, forKey: .fanmaker_identifiers) {
-            fanmaker_identifiers = try JSONSerialization.jsonObject(with: identifiersData, options: []) as? [String: Any]
+        // fanmaker_identifiers is a nested JSON object. Decoding it as Data
+        // asked JSONDecoder for a base64 string, so it threw a type mismatch
+        // whenever the field was present - and setIdentifiers(fromJSON:)
+        // swallowed that, dropping *every* identifier rather than just this
+        // one. Read it as a dynamic-keyed container instead, the same way the
+        // other responses in this package read their free-form dictionaries.
+        if let nested = try? container.nestedContainer(keyedBy: DynamicCodingKeys.self,
+                                                       forKey: .fanmaker_identifiers) {
+            var dict: [String: Any] = [:]
+            for key in nested.allKeys {
+                if let value = try? nested.decode(String.self, forKey: key) {
+                    dict[key.stringValue] = value
+                } else if let value = try? nested.decode(Int.self, forKey: key) {
+                    dict[key.stringValue] = value
+                } else if let value = try? nested.decode(Double.self, forKey: key) {
+                    dict[key.stringValue] = value
+                } else if let value = try? nested.decode(Bool.self, forKey: key) {
+                    dict[key.stringValue] = value
+                }
+            }
+            fanmaker_identifiers = dict
         } else {
             fanmaker_identifiers = nil
         }
+    }
+}
+
+private struct DynamicCodingKeys: CodingKey {
+    var stringValue: String
+    var intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+    }
+
+    init?(intValue: Int) {
+        self.stringValue = "\(intValue)"
+        self.intValue = intValue
     }
 }
