@@ -9,14 +9,20 @@ The Fanmaker Swift SDK provides iOS developers with a way of inserting the Fanma
 Please follow this checklist to ensure the Fanmaker SDK is implemented correctly.
 The items below are **required for certification**.
 
-- [ ] **Ensure Fanmaker opens in a full-screen sheet or modal**
+- [ ] **Fanmaker is opened with [`sdk.present()`](https://github.com/FanMaker/Turducken?tab=readme-ov-file#displaying-fanmaker-ui)**
+  - This satisfies the display and exit items below on its own: the SDK presents a
+    full-height sheet and closes itself
+  - Presenting the view controller yourself is still supported, but is no longer the
+    recommended integration — see [presenting it yourself](https://github.com/FanMaker/Turducken?tab=readme-ov-file#presenting-it-yourself-legacy)
 - [ ] **No primary app UI visible**
   - No wrapper, header, or logos from the primary app present  
     (Client branding is displayed prominently *inside* the SDK)
   - No primary app navigation visible when opening the Fanmaker SDK to avoid confusion or menu stacking
 - [ ] **Exit behavior implemented**
-  - Swipe-down gesture for sheets **or**
-  - [Close action handled](https://github.com/FanMaker/Turducken?tab=readme-ov-file#handling-sdk-close-actions)
+  - Handled for you by `sdk.present()` — iOS supplies the swipe-down, and the SDK
+    closes itself on the close action
+  - If you present it yourself: swipe-down gesture for sheets **or**
+    [close action handled](https://github.com/FanMaker/Turducken?tab=readme-ov-file#handling-sdk-close-actions)
 - [ ] **Background GPS permissions**
   - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#location-tracking)
   - Functioning as expected
@@ -138,11 +144,137 @@ struct MyApp: App {
 
 ### Displaying Fanmaker UI
 
-In order to show Fanmaker UI in your app, create an instance of `FanMakerSDKWebViewController` (`UIViewController` subclass) and use it as you find convenient.
-
-Fanmaker SDK also provides a `FanMakerSDKWebViewControllerRepresentable` wrapper which complies with `UIViewControllerRepresentable` protocol. For example, the following code is used to show it as a sheet modal when users press a button (which we recomend):
-
+```swift
+AppDelegate.fanmakerSDK1.present()
 ```
+
+That is the whole integration. The SDK finds the topmost view controller, presents
+the Fanmaker UI as a full-height sheet, and closes it again when the fan is done.
+There is no view controller to construct, no presentation style to choose, no
+`isShowing` state to keep in sync, and no dismissal to wire up.
+
+#### Presentation options
+
+| Style | What the fan gets | When to use it |
+| --- | --- | --- |
+| `.sheet` **(default)** | Full-height sheet with a grabber. iOS supplies swipe-to-dismiss. | Almost always. The fan always has a way out, whatever the content does. |
+| `.fullScreen` | Edge to edge. The only way out is a close control drawn by the content itself. | Only where you know the content draws one — and never for a flow that can land on the login page. |
+
+**Why `.sheet` is the default.** iOS supplies the way out — a grabber and a
+swipe-down — and that matters more than it sounds: **Fanmaker's own login page does
+not draw a close button**. A fan who opens the UI full screen and decides not to
+sign in has no way out at all. The sheet uses a single full-height detent, so the
+content still gets the whole screen; the only thing you give up is the last few
+points at the top.
+
+**Choosing a style.** Pass one to the call, or set a default on the instance:
+
+```swift
+// Per call — wins over the instance setting
+AppDelegate.fanmakerSDK1.present(style: .sheet)
+AppDelegate.fanmakerSDK1.present(style: .fullScreen)
+
+// Per instance — used by every present() that does not pass a style
+AppDelegate.fanmakerSDK1.presentationStyle = .fullScreen
+AppDelegate.fanmakerSDK1.present()            // full screen
+
+// Omitting the parameter never hardcodes a sheet; it defers to the instance
+AppDelegate.fanmakerSDK1.present()
+```
+
+Precedence is: **style passed to the call** → **`presentationStyle` on the
+instance** → **`.sheet`**.
+
+On iOS 13 and 14 there are no sheet detents, so `.sheet` presents as a standard
+`.pageSheet` card. It is still swipe-dismissable, which is the part that matters.
+
+#### Closing
+
+The SDK closes its own screen. You do not need to do anything.
+
+- Web content triggering the close action closes the sheet.
+- A fan swiping the sheet away closes it, and the SDK posts its close notification
+  with `params: ["source": "swipe"]` so you can still react.
+- Setting `FanMakerSDK.onClose` takes precedence, if you would rather handle closing
+  yourself. See [Handling SDK Close Actions](#handling-sdk-close-actions).
+
+#### The rest of the API
+
+```swift
+@discardableResult
+func present(style: FanMakerSDKPresentationStyle? = nil,
+             animated: Bool = true,
+             completion: (() -> Void)? = nil) -> Bool
+
+@discardableResult
+func present(from host: UIViewController,
+             style: FanMakerSDKPresentationStyle? = nil,
+             animated: Bool = true,
+             completion: (() -> Void)? = nil) -> Bool
+
+func dismiss(animated: Bool = true)
+
+var presentationStyle: FanMakerSDKPresentationStyle   // default .sheet
+var isPresenting: Bool { get }
+```
+
+- **`present(from:)`** presents from a view controller you name, rather than the
+  topmost one. Useful for an app driving several scenes, or one that wants the UI
+  to come from a specific place in its hierarchy.
+- **`dismiss()`** closes a screen `present()` put up, for closing from your own
+  code. Web content triggering close, and a fan swiping the sheet away, both
+  already unwind on their own.
+- **`isPresenting`** is whether this instance currently has a screen on display.
+
+Both `present` methods return whether they presented anything. They return `false`
+when the SDK has not been initialized, when there is no visible view controller to
+present from, or when this instance already has a screen up — a second `present()`
+is refused rather than stacking a copy the fan then has to dismiss twice.
+
+### Presenting it yourself (legacy)
+
+> **Still fully supported, but no longer recommended.** New integrations should use
+> `sdk.present()` above. This path is the source of most integration problems we
+> see — it asks every host to solve presentation, hierarchy traversal, close
+> handling and dismissal for themselves, and each one solves it slightly
+> differently. We intend to keep it working for existing integrations, and to move
+> new ones onto the SDK-owned path. Expect it to be formally deprecated in a future
+> release; it will not be removed without notice and a migration path.
+
+Create an instance of `FanMakerSDKWebViewController` (a `UIViewController` subclass)
+and use it as you find convenient. Pick the form that matches your host app's UI
+framework:
+
+- **UIKit hosts** — instantiate `FanMakerSDKWebViewController(sdk:)` directly and
+  present it with UIKit's `present(_:animated:)`.
+- **SwiftUI hosts** — use `FanMakerSDKWebViewControllerRepresentable`, which conforms
+  to `UIViewControllerRepresentable`, inside `.sheet` / `.fullScreenCover`.
+
+> :warning: Do **not** bridge `FanMakerSDKWebViewControllerRepresentable` through
+> `UIHostingController` to present from a UIKit host. The SwiftUI lifecycle that
+> materializes the underlying controller can fail to fire in that configuration,
+> which leaves `viewDidLoad` unrun and any deep-link path stored on the SDK
+> unconsumed. UIKit hosts should construct the controller directly — or use
+> `sdk.present()`, which handles this for you.
+
+#### UIKit
+
+```swift
+import UIKit
+import FanMaker
+
+class MyViewController: UIViewController {
+    @objc func showFanMakerUI() {
+        let fanMakerUI = FanMakerSDKWebViewController(sdk: AppDelegate.fanmakerSDK1)
+        present(fanMakerUI, animated: true)
+    }
+}
+```
+
+#### SwiftUI
+
+
+```swift
 import SwiftUI
 import FanMaker
 
@@ -152,17 +284,53 @@ struct ContentView : View {
     var body : some View {
         Button("Show FanMaker UI", action: { isShowingFanMakerUI = true })
             .sheet(isPresented: $isShowingFanMakerUI) {
-                // FanMakerUI Display
                 FanMakerSDKWebViewControllerRepresentable(sdk: AppDelegate.fanmakerSDK1)
-                Button("Hide FanMakerUI", action: { isShowingFanMakerUI = false })
             }
     }
 }
 ```
 
+Two things to be aware of if you take this path:
+
+**The SDK still closes its own screen.** When web content triggers the close action
+and you have not set `onClose`, the SDK dismisses itself — handling all three ways
+you might have put it there: presented modally, pushed onto a navigation stack, or
+embedded as a child view controller. Earlier releases did nothing here, so if you
+wrote your own dismissal you can now delete it, or keep `onClose` set to retain
+control.
+
+**SwiftUI `.sheet(isPresented:)` and self-closing do not mix cleanly.** When the SDK
+dismisses itself out of a sheet that SwiftUI owns, your `isPresented` binding can
+stay `true` — SwiftUI still believes the sheet is up, which quietly blocks the next
+open. Either set `onClose` and flip the binding yourself, or use `sdk.present()`,
+where SwiftUI never holds the flag. This is the clearest case for moving over.
+
+**Loading no longer blocks the thread that presents it.** Resolving the site URL,
+running auto-login and refreshing the session token all happen off the main thread,
+and the SDK's loading screen is up while they do. Earlier releases did this work
+behind `DispatchSemaphore.wait()` inside `viewDidLoad`, so presenting the SDK froze
+the app for as long as those calls took — 350 ms on a good connection, longer on a
+venue network, and unbounded if the site-details call never answered. Nothing is
+required of you; a host that presents `FanMakerSDKWebViewController` simply stops
+paying that freeze.
+
+If you drive the lower-level `FanMakerSDKWebView` yourself, note that
+`prepareUIView()` still blocks by contract, because it is public and existing
+integrations call it. Prefer `prepareUIView(completion:)`, whose completion runs on
+the main thread once the request has been loaded. The same applies to
+`loginUserFromParams()`, which now has a non-blocking `loginUserFromParams(completion:)`
+counterpart. Constructing `FanMakerSDKWebView` no longer performs a network call at
+all, so a SwiftUI host embedding it directly will briefly see an empty webview where
+it previously saw a stalled interface.
+
 ### Handling SDK Close Actions
 
-The Fanmaker SDK provides two ways to handle when the SDK UI is closed by the user:
+> **Optional as of this release.** The SDK closes its own screen, so you no longer
+> have to handle the close action to give a fan a way out. Set `onClose` only if you
+> want to run your own logic on close, or need to dismiss a container of your own —
+> setting it means the SDK stops closing its own screen and hands that job to you.
+
+The Fanmaker SDK provides two ways to observe or handle the SDK UI being closed:
 
 #### Option 1: Closure-Based Callback (Single Listener)
 
@@ -416,6 +584,44 @@ if !nonNilImages.isEmpty {
     }
 }
 ```
+
+### Push Destinations and External Links
+
+The SDK decides for itself which links belong inside its webview and which belong
+in the system browser. You do not have to wire anything up for this.
+
+`site_details/sdk` returns the site's first-party hosts, which the SDK persists and
+restores on `initialize()` — so a **cold-start push tap can classify a link before
+the network has answered**, which is the case that actually breaks.
+
+**Routing a push destination.** Hand the SDK whatever the payload carried:
+
+```swift
+if AppDelegate.fanmakerSDK1.handleUrl(url) {
+    AppDelegate.fanmakerSDK1.present()   // ours - open it in the SDK
+}
+// returned false: not ours, handle it however your app normally would
+```
+
+`handleUrl(_:)` accepts the site's own host and any of its allowed domains, as well
+as the legacy `clientapp://fanmaker/...` shape. Earlier releases accepted **only**
+that magic hostname, so a push carrying an ordinary `https://` link to your own site
+was rejected. If your payload carries a bare path, use `openPath("/store")`, which
+needs no hostname convention at all.
+
+**Links inside the webview.** A link the fan taps that points somewhere not
+first-party is handed to the system browser automatically. Partner and ticketing
+pages need their own browser chrome and the fan's existing session, and have no way
+back when loaded inside an SDK webview.
+
+Only links the fan taps, and links asking for a new window, are ejected. Redirects,
+form posts and subframes are left alone on purpose: SSO and payment flows redirect
+*through* third-party hosts and have to come back, and ejecting those would hand the
+fan a browser mid-login. Nothing is ejected before `site_details/sdk` has answered,
+since the allowlist is not yet known.
+
+`isExternalWebURL(_:)` remains available if you want to ask the same question about a
+URL of your own.
 
 ### Deep Linking / Universal Links
 If you wish to link to something within the Fanmaker SDK, you need to setup your application to accept URL Scheme or Universal Links, or know the resource you are trying to access.
@@ -802,6 +1008,39 @@ AppDelegate.fanmakerSDK1.enableLocationTracking()
 AppDelegate.fanmakerSDK2.enableLocationTracking()
 ```
 
+#### Checking your beacon setup
+
+Every stage of beacon tracking writes an `NSLog` line prefixed `FanMaker (Beacons):`,
+so you can confirm a setup from Xcode's console or `Console.app` without instrumenting
+anything. Filter on that prefix and you should see, in order:
+
+```
+FanMaker (Beacons): Monitoring for beacon region UUID: 2686F39C-… Major: 1
+FanMaker (Beacons): ENTER region 1705 'Kyle Field - NE Tower' (UUID: 2686f39c-… Major 1) via didDetermineState
+FanMaker (Beacons): RANGING STARTED for region 1705 'Kyle Field - NE Tower' (…). Beacon sightings will be logged as they arrive.
+FanMaker (Beacons): RANGED beacon 2686F39C-… major 1 minor 0 [rssi -72, proximity near, accuracy 1.4] - recording
+FanMaker (Beacons): ENTER recorded for region 1705 'Kyle Field - NE Tower'
+FanMaker (Beacons): 1 beacon range actions successfully posted
+```
+
+Reading the gaps is usually enough to place the problem:
+
+| You see | Meaning |
+| --- | --- |
+| No `Monitoring for beacon region` lines | `startScanning` was never reached. Check authorization, and that your host calls the SDK at all — this is the most common integration miss. |
+| `Monitoring…` but no `ENTER` | The device is not inside any configured region. Check the UUID, major and minor against the region set up for your site. |
+| `ENTER` but no `RANGING STARTED` | The region is missing a major value, so no ranging constraint can be built. |
+| `RANGING STARTED` but no `RANGED` | The radio is listening and hearing nothing. Usually the beacon is off, out of range, or advertising a different UUID. |
+| `RANGED … holding off until the 60s uniqueness throttle clears` | Working as intended. The beacon is being seen; repeat sightings are suppressed for the site's uniqueness throttle. Each beacon announces its first sighting regardless, so you always get confirmation. |
+| `RANGED … recording` but no `beacon range actions successfully posted` | The sightings are being captured but not reaching us. Look at connectivity and the session token. |
+
+Ranging does not depend on the network or on your delegate. It starts the moment a
+region is entered and stops the moment it is exited, so a failed request or an unset
+`FanMakerSDKBeaconsManagerDelegate` cannot cost you the sightings for a visit.
+Earlier releases gated both on a successful `beacon_region_actions` request *and* a
+non-nil delegate, which meant an integration that never assigned one recorded nothing
+at all while appearing correctly configured.
+
 ### Recomended Entitlements
 
 Bluetooth (required for beacons)
@@ -827,6 +1066,51 @@ Location (required)
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>By sharing your location you can earn points for checking in to certain events. You may also receive exclusive offers and additional point earning opportunities based on your location</string>
 ```
+## Signing a fan out, and identifier persistence
+
+### Call `logout()` on sign-out
+
+```
+fanMakerSDK?.logout()
+```
+
+`logout()` forgets the fan completely: every identifier, the FanMaker session
+token, and the auto-login user token.
+
+**Use `logout()`, not `clearIdentifiers()`.** Clearing identifiers is not a
+sign-out. The session token is what actually authenticates the fan, so clearing
+only the identifiers leaves the next person to open the webview logged in as the
+previous fan, whatever the identifiers say. `clearIdentifiers()` remains
+available for the narrower job its name describes, and `clearSessionToken()`
+does the token half alone — useful for forcing a re-authentication while keeping
+the identifiers that make one possible.
+
+### Identifiers you set now survive process death
+
+Identifiers set through `setUserID`, `setMemberID`, `setStudentID`,
+`setTicketmasterID`, `setYinzid`, `setPushNotificationToken` and
+`setFanMakerIdentifiers` are now persisted and restored on the next launch.
+Previously only identifiers arriving from the web content were stored, so a host
+that set them once at login silently stopped sending them from the next cold
+start onward.
+
+They are restored whether or not a session token is present. Identifiers are the
+*input* to authentication — the SDK posts them to `/site/auth/auto_login` when
+the webview opens — so a returning fan whose token has gone is exactly the case
+that needs them back. Restoration used to be gated on an existing token, which
+had it backwards and suppressed the auto-login it was meant to protect.
+
+Because persistence means process death is no longer an implicit reset, the
+`logout()` call above is what ends a session.
+
+### A fix worth knowing about if you use arbitrary identifiers
+
+`fanmaker_identifiers` was decoded as base64 `Data` rather than as the nested
+JSON object it is, so it threw whenever it was present — and the error was
+swallowed, which dropped **every** identifier in the payload rather than just
+that one. If you pass arbitrary identifiers and have seen identifiers go missing
+after a relaunch, this was why.
+
 ## :warning: BREAKING CHANGES IN 2.0 :warning:
 Version 2.0 of the FanMakerSDK has changed from static to instanced based initializtion. This means that you will need to modify your implementation to avoid service interruptions in this version. Previous versions of the SDK are no longer available for instalation. Support for SDK versions 1.x will be depreciated on December 20th, 2024, afterwords non version 2.0 + will cease to function.
 
