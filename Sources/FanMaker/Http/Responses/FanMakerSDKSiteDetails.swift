@@ -75,6 +75,22 @@ public struct FanMakerSDKInfoBeacons : Decodable, Sendable {
 public struct FanMakerSDKInfo : Decodable, Sendable {
     public let url : String
     public let beacons : FanMakerSDKInfoBeacons
+    // First-party hosts that may be opened inside the SDK webview. Push
+    // destinations whose host is not present here are external links and
+    // should be opened in the system browser. See FanMaker/app#1885.
+    // Optional so older backends (no `allowed_domains` key) still decode.
+    public let allowed_domains : [String]?
+
+    private enum CodingKeys : String, CodingKey {
+        case url, beacons, allowed_domains
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        url = try container.decode(String.self, forKey: .url)
+        beacons = try container.decode(FanMakerSDKInfoBeacons.self, forKey: .beacons)
+        allowed_domains = try container.decodeIfPresent([String].self, forKey: .allowed_domains)
+    }
 }
 
 public struct FanMakerSDKInfoResponse : FanMakerSDKHttpResponse, @unchecked Sendable {
