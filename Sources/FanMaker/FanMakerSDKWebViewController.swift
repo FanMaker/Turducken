@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AuthenticationServices
 import CoreLocation
 import WebKit
 import SwiftUI
@@ -26,6 +27,7 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
     public var fanmaker : FanMakerSDKWebView? = nil
     private let locationManager : CLLocationManager = CLLocationManager()
     private let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
+    private var authSession : ASWebAuthenticationSession?
 
     open override func viewDidLoad() {
         super.viewDidLoad()
@@ -134,6 +136,8 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                     if let urlString = value as? String {
                         self.sdk.sdkOpenUrl(scheme: urlString)
                     }
+                case "authSession":
+                    self.startAuthSession(value, from: message.frameInfo)
                 case "setToken":
                     if let token = value as? String {
                         defaults?.set(token, forKey: self.sdk.FanMakerSDKSessionToken)
@@ -414,6 +418,58 @@ extension FanMakerSDKWebViewController {
         // failing silently, since from a fan's point of view the close button
         // did nothing.
         NSLog("FanMaker: close requested but this screen is not presented, pushed or embedded, so the SDK cannot dismiss it. Set FanMakerSDK.onClose to handle closing yourself.")
+    }
+
+    /// Runs a sign-in in ASWebAuthenticationSession instead of this webview, for
+    /// providers that cannot work inside one: passkeys are bound to the
+    /// provider's own domain, and some identity providers refuse embedded
+    /// webviews outright. The session hands back the link the sign-in ends on,
+    /// which loads here like any deep link. FanMaker/NUX#907.
+    private func startAuthSession(_ value: Any, from frame: WKFrameInfo) {
+        guard frame.isMainFrame,
+              let request = sdk.authSessionRequest(value, fromHost: frame.securityOrigin.host) else {
+            NSLog("FanMaker refused an authSession request from \(frame.securityOrigin.host): \(value)")
+            reportAuthSession("refused")
+            return
+        }
+        guard authSession == nil else {
+            NSLog("FanMaker ignored an authSession request: one is already open")
+            return
+        }
+
+        let session = ASWebAuthenticationSession(url: request.url, callbackURLScheme: request.callbackScheme) { [weak self] callbackURL, error in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.authSession = nil
+                if let callbackURL = callbackURL, self.sdk.handleUrl(callbackURL) { return }
+                let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
+                NSLog("FanMaker authSession ended without a sign-in: \(callbackURL?.absoluteString ?? error?.localizedDescription ?? "no result")")
+                self.reportAuthSession(cancelled ? "cancelled" : "failed")
+            }
+        }
+        session.presentationContextProvider = self
+        // Shares Safari's cookies, so a fan already signed in to the provider
+        // there is not asked again.
+        session.prefersEphemeralWebBrowserSession = false
+        authSession = session
+        NSLog("FanMaker opening \(request.url.absoluteString) in an authentication session")
+        if !session.start() {
+            authSession = nil
+            reportAuthSession("failed")
+        }
+    }
+
+    /// Tells the page a sign-in it asked for ended without one, so it can reset
+    /// its button. A page that does not listen is left alone.
+    private func reportAuthSession(_ status: String) {
+        fanmaker?.webView.evaluateJavaScript("window.FanMakerReceiveAuthSession && window.FanMakerReceiveAuthSession(\"\(status)\")")
+    }
+}
+
+@available(iOS 13.0, *)
+extension FanMakerSDKWebViewController: ASWebAuthenticationPresentationContextProviding {
+    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        view.window ?? ASPresentationAnchor()
     }
 }
 

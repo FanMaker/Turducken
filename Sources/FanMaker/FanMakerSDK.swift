@@ -202,6 +202,37 @@ public class FanMakerSDK {
         return false
     }
 
+    /// A sign-in a page asked to run in ASWebAuthenticationSession: where it
+    /// starts, and the scheme of the link it ends on.
+    struct AuthSessionRequest: Equatable {
+        let url: URL
+        let callbackScheme: String
+    }
+
+    /// The sign-in an `authSession` message asks for, or nil when it has to be
+    /// refused. The session's result is a sign-in link this webview then
+    /// follows, so only one of our own pages may ask - a page we don't own
+    /// could otherwise end the session on someone else's sign-in - and only for
+    /// a start URL on one of our hosts.
+    func authSessionRequest(_ value: Any, fromHost originHost: String?) -> AuthSessionRequest? {
+        guard isOwnHost(originHost),
+              let body = value as? [String: Any],
+              let url = (body["url"] as? String).flatMap(URL.init(string:)),
+              url.scheme?.lowercased() == "https",
+              isOwnHost(url.host),
+              let scheme = (body["callbackScheme"] as? String)?.lowercased(),
+              scheme.range(of: "^[a-z][a-z0-9+.-]*$", options: .regularExpression) != nil,
+              !["http", "https", "javascript", "data", "file", "about"].contains(scheme)
+        else { return nil }
+        return AuthSessionRequest(url: url, callbackScheme: scheme)
+    }
+
+    /// A fanmaker.com host, the site's own host or one it allows. Fails closed.
+    private func isOwnHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return host == "fanmaker.com" || host.hasSuffix(".fanmaker.com") || isFirstPartyHost(host)
+    }
+
     // Used for "Deep Linking"
     public func handleUrl(_ url: URL) -> Bool {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),

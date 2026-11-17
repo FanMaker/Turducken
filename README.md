@@ -625,6 +625,14 @@ what keeps the SSO sign-in tap itself in the webview. Nothing is ejected before
 `isExternalWebURL(_:)` remains available if you want to ask the same question about a
 URL of your own.
 
+**Sign-ins that can't run in a webview.** Some providers' sign-ins don't work inside an
+embedded webview: Ticketmaster's passkeys are bound to ticketmaster.com, and some
+identity providers refuse embedded webviews outright. For those, FanMaker's page asks
+the SDK to run the sign-in in an `ASWebAuthenticationSession` sheet instead. It shares
+Safari's sign-ins and passkeys, and the SDK loads the link the sign-in ends on back
+into its webview. Your app needs no change and registers nothing; iOS asks the fan once
+per sign-in whether your app may use the provider's site to sign in.
+
 ### Deep Linking / Universal Links
 If you wish to link to something within the Fanmaker SDK, you need to setup your application to accept URL Scheme or Universal Links, or know the resource you are trying to access.
 
