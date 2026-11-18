@@ -34,6 +34,12 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
 
         let userController : WKUserContentController = WKUserContentController()
         userController.add(self, name: "fanmaker")
+        // The Android SDK's call, so a page asks for a sign-in the same way on
+        // both platforms and checks for this object rather than an SDK version.
+        userController.addUserScript(WKUserScript(
+            source: "window.fanmakerAuthSession = { postMessage: function (json) { window.webkit.messageHandlers.fanmaker.postMessage({ authSession: JSON.parse(json) }); } };",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true))
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = userController
 
@@ -443,13 +449,15 @@ extension FanMakerSDKWebViewController {
                 self.authSession = nil
                 if let callbackURL = callbackURL, self.sdk.handleUrl(callbackURL) { return }
                 let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
-                NSLog("FanMaker authSession ended without a sign-in: \(callbackURL?.absoluteString ?? error?.localizedDescription ?? "no result")")
+                // An sso_login key signs whoever holds it in, so it stays out of logs.
+                let returned = callbackURL?.absoluteString.replacingOccurrences(
+                    of: "/sso_login/[^/?#]+", with: "/sso_login/…", options: .regularExpression)
+                NSLog("FanMaker authSession ended without a sign-in: \(returned ?? error?.localizedDescription ?? "no result")")
                 self.reportAuthSession(cancelled ? "cancelled" : "failed")
             }
         }
         session.presentationContextProvider = self
-        // Shares Safari's cookies, so a fan already signed in to the provider
-        // there is not asked again.
+        // Shares Safari's cookies with the provider's pages.
         session.prefersEphemeralWebBrowserSession = false
         authSession = session
         NSLog("FanMaker opening \(request.url.absoluteString) in an authentication session")
