@@ -457,8 +457,12 @@ extension FanMakerSDKWebViewController {
             }
         }
         session.presentationContextProvider = self
-        // Shares Safari's cookies with the provider's pages.
-        session.prefersEphemeralWebBrowserSession = false
+        // Private, so a sign-in neither uses nor changes the fan's own Safari
+        // session. Ticketmaster's flow signs the fan out of Ticketmaster before
+        // signing in; shared, that signed them out of Safari on every FanMaker
+        // login. Passkeys still work, and iOS skips its "wants to use ... to
+        // sign in" prompt for a private session.
+        session.prefersEphemeralWebBrowserSession = true
         authSession = session
         NSLog("FanMaker opening \(request.url.absoluteString) in an authentication session")
         if !session.start() {
