@@ -42,7 +42,7 @@ public struct FanMakerSDKUserDefaults {
 
 public class FanMakerSDK {
     /// Sent as `X-FanMaker-SDK-Version` on every request. Bump it here only.
-    static let version = "4.0.3"
+    static let version = "4.1.0"
 
     public var firstLaunch : Bool = true
     public var finishedLaunching : Bool = false
@@ -955,17 +955,61 @@ public class FanMakerSDK {
 
     // MARK: - Ending a Session
 
-    /// Forgets the fan completely: every identifier, the session token, and the
-    /// auto-login user token. This is what a host should call on sign-out.
+    /// Forgets the fan completely: every identifier, the session token, the
+    /// auto-login user token, and the cookies and stored site data of the SDK's
+    /// web view. This is what a host should call on sign-out.
     ///
     /// Clearing identifiers alone is not a sign-out. The session token is what
-    /// authenticates the fan, so leaving it behind means the next person to
-    /// open the webview arrives logged in as the previous one, whatever the
-    /// identifiers say.
-    public func logout() {
+    /// authenticates the fan, and Fanmaker's pages and sign-in providers keep
+    /// their own state in the web view, so leaving any of it behind means the
+    /// next person to open the webview arrives logged in as the previous one.
+    ///
+    /// From iOS 17 the SDK's web view has a data store of its own, and all of it
+    /// is cleared. Before that WebKit offers only the store the host app's web
+    /// views share, so only the records for Fanmaker's own hosts are cleared.
+    /// `completion` runs on the main thread once it is done.
+    public func logout(completion: (() -> Void)? = nil) {
+        let ownHosts = ([baseURL.flatMap { URL(string: $0)?.host }].compactMap { $0 }) + allowedDomains
         clearIdentifiers()
         clearSessionToken()
-        NSLog("FanMaker logged out: identifiers and session token cleared")
+        DispatchQueue.main.async {
+            let store = FanMakerSDK.webDataStore
+            let types = WKWebsiteDataStore.allWebsiteDataTypes()
+            let done = {
+                NSLog("FanMaker logged out: identifiers, session token and web data cleared")
+                completion?()
+            }
+            if #available(iOS 17.0, *) {
+                store.removeData(ofTypes: types, modifiedSince: .distantPast, completionHandler: done)
+            } else {
+                store.fetchDataRecords(ofTypes: types) { records in
+                    let ours = records.filter { FanMakerSDK.isOwnWebDataRecord($0.displayName, ownHosts: ownHosts) }
+                    store.removeData(ofTypes: types, for: ours, completionHandler: done)
+                }
+            }
+        }
+    }
+
+    /// Identifies the SDK web view's own data store (iOS 17+). Fixed, so the
+    /// store, and the fan's session in it, survives app restarts.
+    static let webDataStoreID = UUID(uuidString: "6F1A9E2C-3B5D-4E7A-9C1F-0D2E4B6A8C10")!
+
+    /// Where the SDK's web view keeps its cookies and site data: a store of its
+    /// own from iOS 17, so logout() never touches the host app's web views;
+    /// before that, the default store every web view in the app shares.
+    static let webDataStore: WKWebsiteDataStore = {
+        if #available(iOS 17.0, *) { return WKWebsiteDataStore(forIdentifier: webDataStoreID) }
+        return .default()
+    }()
+
+    /// Whether a website data record (WebKit names one by its registrable
+    /// domain, e.g. "fanmaker.com") belongs to one of our own hosts.
+    static func isOwnWebDataRecord(_ displayName: String, ownHosts: [String]) -> Bool {
+        let name = displayName.lowercased()
+        return (ownHosts + ["fanmaker.com"]).contains { host in
+            let host = host.lowercased()
+            return host == name || host.hasSuffix("." + name)
+        }
     }
 
     /// Forgets the session token and the auto-login user token, leaving

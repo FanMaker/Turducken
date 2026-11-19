@@ -46,6 +46,9 @@ public struct FanMakerSDKWebView : UIViewRepresentable {
 
     public init(sdk: FanMakerSDK, configuration: WKWebViewConfiguration) {
         self.sdk = sdk
+        // Its own cookies and site data, so logout() can clear them without the
+        // host app's (see FanMakerSDK.webDataStore).
+        configuration.websiteDataStore = FanMakerSDK.webDataStore
         self.webView = WKWebView(frame: .zero, configuration: configuration)
         self.sdk.currentWebView = self.webView
     }
