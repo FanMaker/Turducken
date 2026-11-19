@@ -252,8 +252,11 @@ public class FanMakerSDK {
             destination += "?" + query
         }
 
+        // currentWebView outlives its screen, so only a web view that is still
+        // on screen takes the link live. Otherwise the next open consumes it.
         if let baseURL = self.baseURL,
            let webView = self.currentWebView,
+           webView.window != nil,
            let composed = fanMakerComposeURL(baseURL: baseURL, deepLinkPath: destination) {
             // Through the same builder as the first load. This was a bare request,
             // so a deep link into an open webview reloaded NUX with no session,

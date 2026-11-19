@@ -1,4 +1,5 @@
 import XCTest
+import WebKit
 @testable import FanMaker
 
 final class URLCompositionTests: XCTestCase {
@@ -91,5 +92,31 @@ final class URLCompositionTests: XCTestCase {
         sdk.initialize(apiKey: "query-\(UUID().uuidString)")
         XCTAssertTrue(sdk.handleUrl(URL(string: "turducken://fanmaker/rewards?utm=push")!))
         XCTAssertEqual(sdk.deepLinkPath, "/rewards?utm=push")
+    }
+
+    // currentWebView outlives the screen it belonged to. A link that arrived
+    // after the fan closed the SDK was loaded into that off-screen web view and
+    // never queued, so the next present() opened the home page instead.
+    func test_handleUrl_queuesWhenTheLastWebViewIsNoLongerOnScreen() {
+        let sdk = FanMakerSDK()
+        sdk.initialize(apiKey: "closed-\(UUID().uuidString)")
+        sdk.baseURL = "https://www.loiltyrewards.com"
+        sdk.currentWebView = WKWebView()
+
+        XCTAssertTrue(sdk.handleUrl(URL(string: "turducken://fanmaker/store")!))
+        XCTAssertEqual(sdk.deepLinkPath, "/store")
+    }
+
+    func test_handleUrl_navigatesTheWebViewOnScreenInsteadOfQueueing() {
+        let sdk = FanMakerSDK()
+        sdk.initialize(apiKey: "open-\(UUID().uuidString)")
+        sdk.baseURL = "https://www.loiltyrewards.com"
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+        let webView = WKWebView()
+        window.addSubview(webView)
+        sdk.currentWebView = webView
+
+        XCTAssertTrue(sdk.handleUrl(URL(string: "turducken://fanmaker/store")!))
+        XCTAssertNil(sdk.deepLinkPath, "a link for the open screen must not replay on the next open")
     }
 }
