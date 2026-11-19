@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AuthenticationServices
 import CoreLocation
 import WebKit
 import SwiftUI
@@ -14,7 +15,7 @@ import SwiftUI
 open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
     let sdk: FanMakerSDK
 
-    init(sdk: FanMakerSDK) {
+    public init(sdk: FanMakerSDK) {
         self.sdk = sdk
         super.init(nibName: nil, bundle: nil)
     }
@@ -26,17 +27,23 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
     public var fanmaker : FanMakerSDKWebView? = nil
     private let locationManager : CLLocationManager = CLLocationManager()
     private let locationDelegate : FanMakerSDKLocationDelegate = FanMakerSDKLocationDelegate()
+    private var authSession : ASWebAuthenticationSession?
 
     open override func viewDidLoad() {
         super.viewDidLoad()
 
         let userController : WKUserContentController = WKUserContentController()
         userController.add(self, name: "fanmaker")
+        // The Android SDK's call, so a page asks for a sign-in the same way on
+        // both platforms and checks for this object rather than an SDK version.
+        userController.addUserScript(WKUserScript(
+            source: "window.fanmakerAuthSession = { postMessage: function (json) { window.webkit.messageHandlers.fanmaker.postMessage({ authSession: JSON.parse(json) }); } };",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true))
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = userController
 
         self.fanmaker = FanMakerSDKWebView(sdk: self.sdk, configuration: configuration)
-        self.fanmaker?.prepareUIView()
         self.fanmaker?.webView.navigationDelegate = self
 
         self.view = UIView(frame: self.view!.bounds)
@@ -65,10 +72,64 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                 spinner.centerYAnchor.constraint(equalTo: self.view.centerYAnchor)
             ])
         }
+
+        // Started only once the loading screen is up. Site details, auto-login and
+        // token resolution all happen off the main thread; `webView(_:didFinish:)`
+        // swaps the webview in when the page lands.
+        self.fanmaker?.prepareUIView { loaded in
+            if !loaded {
+                NSLog("FanMaker Error: could not build the webview request - the loading screen will stay up")
+            }
+        }
     }
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation) {
         self.view = self.fanmaker!.webView
+    }
+
+    /// Sends links that leave first-party territory to the system browser
+    /// instead of loading them in the SDK's webview.
+    ///
+    /// This used to be the host app's job: the SDK exposed `isExternalWebURL`
+    /// and left every integration to call it, which is the sort of setup that
+    /// gets skipped and then reported as a broken link. A partner or ticketing
+    /// page loaded inside the SDK webview has no browser chrome, no way back,
+    /// and none of the fan's existing session.
+    ///
+    /// Deliberately narrow about what counts, because SSO and checkout run
+    /// *through* third-party pages and have to come back:
+    /// - only a tap, or a request for a new window - never a redirect or a
+    ///   form post;
+    /// - only one that replaces the whole page - a tap inside an embedded
+    ///   frame navigates that frame, not the fan away from us;
+    /// - only from one of our own pages - once SSO has put the webview on the
+    ///   provider's login page, that page's own links ("forgot password") have
+    ///   to work in place, or the fan is handed a browser mid-sign-in.
+    /// Our `*.fanmaker.com` hosts count as ours, which is what keeps the SSO
+    /// entry tap itself (tmauth, nfl, seatgeek.fanmaker.com) in the webview.
+    /// `isExternalWebURL` also fails open before `site_details/sdk` has
+    /// answered, so nothing is ejected while the allowlist is still unknown.
+    public func webView(_ webView: WKWebView,
+                        decidePolicyFor navigationAction: WKNavigationAction,
+                        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.allow)
+            return
+        }
+
+        let opensANewWindow = navigationAction.targetFrame == nil
+        let fanTappedIt = navigationAction.navigationType == .linkActivated
+            && navigationAction.targetFrame?.isMainFrame == true
+
+        guard fanTappedIt || opensANewWindow,
+              self.sdk.shouldOpenInBrowser(url, from: webView.url) else {
+            decisionHandler(.allow)
+            return
+        }
+
+        NSLog("FanMaker handing \(url.absoluteString) to the system browser: not a first-party host")
+        decisionHandler(.cancel)
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
     }
 
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -81,6 +142,8 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                     if let urlString = value as? String {
                         self.sdk.sdkOpenUrl(scheme: urlString)
                     }
+                case "authSession":
+                    self.startAuthSession(value, from: message.frameInfo)
                 case "setToken":
                     if let token = value as? String {
                         defaults?.set(token, forKey: self.sdk.FanMakerSDKSessionToken)
@@ -112,7 +175,18 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                             }
                         }
                     } else {
-                        NSLog("FanMaker determined that CLLocationManager.locationServices are DISABLED")
+                        // This branch used to only log. JS saw pure silence and
+                        // waited out NUX's whole retry cycle - five attempts at
+                        // ten second intervals, ~50s - before falling back to
+                        // navigator.geolocation. Answering false turns that
+                        // hang into an immediate, correct answer; NUX already
+                        // handles authorized == false, and the failure branch
+                        // just above reports it the same way.
+                        let reason = !self.sdk.locationEnabled
+                            ? "location tracking is disabled on the SDK instance"
+                            : "CLLocationManager.locationServicesEnabled() is false"
+                        NSLog("FanMaker cannot provide a location: \(reason)")
+                        self.fanmaker!.webView.evaluateJavaScript("FanMakerReceiveLocationAuthorization(false)")
                     }
                 case "returnSDKInformation":
                     if let value = value as? String {
@@ -176,8 +250,18 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                         }
                         // Special handling for "close" action (backward compatibility)
                         else if actionValue == "close" {
-                            // Call closure-based callback if set
-                            self.sdk.onClose?(params)
+                            // Same rule as Android: an integrator's own handler
+                            // wins, and when there isn't one the SDK closes its
+                            // own screen rather than leaving it on top of the
+                            // host app with nothing listening. Before this,
+                            // nothing on iOS dismissed anything - every
+                            // integration had to wire that up itself, and the
+                            // ones that did not left fans stuck on the page.
+                            if let onClose = self.sdk.onClose {
+                                onClose(params)
+                            } else {
+                                self.dismissSelf()
+                            }
                         }
 
                         // Post notification for all actions (supports multiple listeners)
@@ -263,6 +347,141 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                 }
             }
         }
+    }
+}
+
+/// How the SDK puts the FanMaker UI on screen.
+public enum FanMakerSDKPresentationStyle {
+    /// A sheet at full height, with iOS's grabber and swipe to dismiss.
+    ///
+    /// The default, and the safe one: NUX draws no close button on its login
+    /// page, so a full screen presentation leaves a fan who does not want to
+    /// sign in with no way out.
+    case sheet
+
+    /// Edge to edge, with no way out other than a close control in the content
+    /// itself. Only appropriate where the content is known to draw one.
+    case fullScreen
+}
+
+@available(iOS 13.0, *)
+extension FanMakerSDKWebViewController: UIAdaptivePresentationControllerDelegate {
+    /// A fan swiping the sheet away never goes through the web content's close
+    /// action, so nothing would otherwise tell a host the UI had gone.
+    ///
+    /// This posts the close notification but deliberately does not invoke
+    /// `onClose`: that closure is a request to *perform* a dismissal, and the
+    /// dismissal has already happened here - calling it could send a host off
+    /// to dismiss a container of their own that is still meant to be up.
+    public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        NotificationCenter.default.post(
+            name: FanMakerSDK.closeSdk,
+            object: self.sdk,
+            userInfo: ["params": ["source": "swipe"]]
+        )
+    }
+}
+
+@available(iOS 13.0, *)
+extension FanMakerSDKWebViewController {
+    /// Closes this screen, whichever way the host put it on screen.
+    ///
+    /// A host can present the SDK modally, push it onto a navigation stack, or
+    /// embed it as a child view controller, and each needs a different call to
+    /// undo. Rather than assume one, this asks the controller how it is
+    /// contained and unwinds that.
+    ///
+    /// Called when web content triggers the close action and the integrator has
+    /// not set `FanMakerSDK.onClose`.
+    public func dismissSelf(animated: Bool = true) {
+        // Always on the main thread; this can arrive from a WKScriptMessage.
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { self.dismissSelf(animated: animated) }
+            return
+        }
+
+        if isBeingDismissed { return }
+
+        if presentingViewController != nil {
+            dismiss(animated: animated)
+            return
+        }
+
+        if let navigation = navigationController, navigation.viewControllers.count > 1 {
+            navigation.popViewController(animated: animated)
+            return
+        }
+
+        if parent != nil {
+            willMove(toParent: nil)
+            view.removeFromSuperview()
+            removeFromParent()
+            return
+        }
+
+        // Nothing owns this controller in a way we can unwind - a host that
+        // installed it as a window's root, for instance. Say so rather than
+        // failing silently, since from a fan's point of view the close button
+        // did nothing.
+        NSLog("FanMaker: close requested but this screen is not presented, pushed or embedded, so the SDK cannot dismiss it. Set FanMakerSDK.onClose to handle closing yourself.")
+    }
+
+    /// Runs a sign-in in ASWebAuthenticationSession instead of this webview, for
+    /// providers that cannot work inside one: passkeys are bound to the
+    /// provider's own domain, and some identity providers refuse embedded
+    /// webviews outright. The session hands back the link the sign-in ends on,
+    /// which loads here like any deep link. FanMaker/NUX#907.
+    private func startAuthSession(_ value: Any, from frame: WKFrameInfo) {
+        guard frame.isMainFrame,
+              let request = sdk.authSessionRequest(value, fromHost: frame.securityOrigin.host) else {
+            NSLog("FanMaker refused an authSession request from \(frame.securityOrigin.host): \(value)")
+            reportAuthSession("refused")
+            return
+        }
+        guard authSession == nil else {
+            NSLog("FanMaker ignored an authSession request: one is already open")
+            return
+        }
+
+        let session = ASWebAuthenticationSession(url: request.url, callbackURLScheme: request.callbackScheme) { [weak self] callbackURL, error in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.authSession = nil
+                if let callbackURL = callbackURL, self.sdk.handleUrl(callbackURL) { return }
+                let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
+                // An sso_login key signs whoever holds it in, so it stays out of logs.
+                let returned = callbackURL?.absoluteString.replacingOccurrences(
+                    of: "/sso_login/[^/?#]+", with: "/sso_login/…", options: .regularExpression)
+                NSLog("FanMaker authSession ended without a sign-in: \(returned ?? error?.localizedDescription ?? "no result")")
+                self.reportAuthSession(cancelled ? "cancelled" : "failed")
+            }
+        }
+        session.presentationContextProvider = self
+        // Private, so a sign-in neither uses nor changes the fan's own Safari
+        // session. Ticketmaster's flow signs the fan out of Ticketmaster before
+        // signing in; shared, that signed them out of Safari on every FanMaker
+        // login. Passkeys still work, and iOS skips its "wants to use ... to
+        // sign in" prompt for a private session.
+        session.prefersEphemeralWebBrowserSession = true
+        authSession = session
+        NSLog("FanMaker opening \(request.url.absoluteString) in an authentication session")
+        if !session.start() {
+            authSession = nil
+            reportAuthSession("failed")
+        }
+    }
+
+    /// Tells the page a sign-in it asked for ended without one, so it can reset
+    /// its button. A page that does not listen is left alone.
+    private func reportAuthSession(_ status: String) {
+        fanmaker?.webView.evaluateJavaScript("window.FanMakerReceiveAuthSession && window.FanMakerReceiveAuthSession(\"\(status)\")")
+    }
+}
+
+@available(iOS 13.0, *)
+extension FanMakerSDKWebViewController: ASWebAuthenticationPresentationContextProviding {
+    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        view.window ?? ASPresentationAnchor()
     }
 }
 

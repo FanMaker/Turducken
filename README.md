@@ -2,60 +2,131 @@
 
 ## About
 
-The Fanmaker Swift SDK provides iOS developers with a way of inserting the Fanmaker UI in another app. The view can be displayed as part of a navigation stack, a modal or even a subview in an app's layout.
+The Fanmaker Swift SDK lets an iOS app show the Fanmaker UI inside the app. One call,
+`sdk.present()`, puts it on screen as a sheet and takes it down again. If your app needs to
+place the UI itself, you can still show the view controller in a navigation stack, a modal
+or a subview.
+
+## What's New in 4.1.0
+
+4.1.0 is a drop-in upgrade from 4.0.x. No public API was removed or renamed, and an
+existing integration builds without changes.
+
+### Upgrading from 4.0.x
+
+Do these when you upgrade:
+
+1. **Call `logout()` when a fan signs out of your app.** Identifiers you set
+   (`setMemberID`, `setFanMakerIdentifiers` and the rest) are now saved on the device and
+   sent again after a relaunch, so restarting the app no longer forgets them. `logout()`
+   also clears the SDK web view's cookies and stored website data, and leaves your own web
+   views alone. See [Signing a Fan Out](#signing-a-fan-out).
+2. **Check how you close the Fanmaker UI.** When the Fanmaker UI asks to close and you have
+   not set `onClose`, the SDK now closes its own screen.
+   - If you set `onClose` only to dismiss the screen, you can remove it.
+   - If you dismiss the screen from a `FanMakerSDK.closeSdk` observer, remove that
+     dismissal, or move it into `onClose` so the SDK leaves closing to you.
+   - If you show the UI with SwiftUI's `.sheet(isPresented:)` and have no `onClose`, your
+     binding can stay `true` after the SDK closes the sheet, which blocks the next open.
+     Set `onClose` to reset it, or switch to `present()`.
+
+   See [Handling SDK Close Actions](#handling-sdk-close-actions).
+
+We recommend:
+
+3. **Open the Fanmaker UI with `sdk.present()`.** The SDK presents its own screen as a
+   full-height sheet and closes it again. Presenting `FanMakerSDKWebViewController`
+   yourself still works. See [Displaying Fanmaker UI](#displaying-fanmaker-ui).
+4. **Pass push destinations to `handleUrl(_:)` as they arrive.** It now accepts `https://`
+   links to your program's sites, and the new `openPath(_:)` takes a bare path. See
+   [Deep Linking / Universal Links](#deep-linking--universal-links).
+
+Changes you may notice:
+
+- A link on a Fanmaker page that leads outside your program's sites now opens in the system
+  browser instead of inside the SDK. See
+  [Links and Sign-ins Inside the SDK](#links-and-sign-ins-inside-the-sdk).
+- The requests that load the Fanmaker UI now include your app's display name, version and
+  bundle identifier, and the device's iOS version and model.
+- On iOS 17 and later the Fanmaker UI keeps its cookies and site data apart from your app's
+  own web views, so a fan may need to sign in to the Fanmaker UI once after the update.
+
+Works better, with no change from you:
+
+- Sign-ins that can't run in a webview, such as Ticketmaster's passkey sign-in, now run in
+  a system sign-in sheet without the fan leaving your app.
+- Deep links keep their query string.
+- A deep link into an already open Fanmaker UI keeps the fan signed in.
+- A fan who is already inside a beacon region when scanning starts is now counted.
+- Beacon ranging continues when a request to Fanmaker fails, and every stage is logged.
+  See [Checking your beacon setup](#checking-your-beacon-setup).
+- Fixed a rare crash, or a missed beacon region entry, when the region list was refreshed.
+- When location is turned off or unavailable, the Fanmaker UI is told at once instead of
+  waiting.
 
 ## Successful Implementation Checklist
 
 Please follow this checklist to ensure the Fanmaker SDK is implemented correctly.
 The items below are **required for certification**.
 
-- [ ] **Ensure Fanmaker opens in a full-screen sheet or modal**
+- [ ] **Fanmaker opens in a full-height sheet or full-screen modal**
+  - [`sdk.present()`](#displaying-fanmaker-ui) does this for you, and is the recommended way
+  - If you [present it yourself](#presenting-it-yourself-legacy), use a full-height sheet
+    or a full-screen modal
 - [ ] **No primary app UI visible**
-  - No wrapper, header, or logos from the primary app present  
+  - No wrapper, header, or logos from the primary app present
     (Client branding is displayed prominently *inside* the SDK)
   - No primary app navigation visible when opening the Fanmaker SDK to avoid confusion or menu stacking
 - [ ] **Exit behavior implemented**
-  - Swipe-down gesture for sheets **or**
-  - [Close action handled](https://github.com/FanMaker/Turducken?tab=readme-ov-file#handling-sdk-close-actions)
+  - Handled for you by `sdk.present()`: iOS supplies the swipe-down, and the SDK closes
+    itself on the close action
+  - If you present it yourself: swipe-down gesture for sheets **or**
+    [close action handled](#handling-sdk-close-actions)
 - [ ] **Background GPS permissions**
-  - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#location-tracking)
+  - [Implemented](#location-tracking)
   - Functioning as expected
 - [ ] **Background Bluetooth permissions**
-  - [Implemented](https://github.com/FanMaker/Turducken/tree/main?tab=readme-ov-file#beacons-tracking)
+  - [Implemented](#beacons-tracking)
   - Functioning as expected
 - [ ] **Push notification token**
   - Token for each user is passed to Fanmaker
-  - [Implemented](https://github.com/Fanmaker/Turducken/tree/main?tab=readme-ov-file#passing-a-push-notification-token)
+  - [Implemented](#passing-a-push-notification-token)
 - [ ] **Deep link handling**
-  - [Implemented](https://github.com/Fanmaker/Turducken/tree/main?tab=readme-ov-file#deep-linking--universal-links)
+  - [Implemented](#deep-linking--universal-links)
   - Functioning as expected
+- [ ] **Sign-out handled** *(required only if your app has its own sign-in)*
+  - [`logout()`](#signing-a-fan-out) called whenever a fan signs out of your app
+  - The next fan's identifiers set only after they sign in
 
-Additional features—such as
-[logged-in user handling](https://github.com/Fanmaker/Turducken/tree/main?tab=readme-ov-file#passing-identifiers) or
-[privacy permissions](https://github.com/Fanmaker/Turducken/tree/main?tab=readme-ov-file#privacy-permissions-optional)
+Additional features, such as [logged-in user handling](#passing-identifiers) and
+[privacy permissions](#privacy-permissions-optional), are optional.
 
 The checklist above represents the **minimum required for a certified integration**.
 
 ## Usage
 
-First add the Fanmaker SDK to your project as a Swift Package:
+First add the Fanmaker SDK to your project as a Swift Package, using
+`https://github.com/FanMaker/Turducken`:
 
 ![xcode1](https://user-images.githubusercontent.com/298020/120363801-2f743e00-c2d2-11eb-89fb-3fd273072d16.png)
 
 ![xcode2](https://user-images.githubusercontent.com/298020/120363926-4c107600-c2d2-11eb-8374-0b7e9cfc21a4.png)
 
 ### Sample App
-A sample iOS app utilizing the SDK is available here (https://github.com/FanMaker/TurduckenSampleApp)
+A sample iOS app using the SDK is available at https://github.com/FanMaker/TurduckenSampleApp.
 
 ### Initialization
 
-To initialize the SDK you need to pass your `<SDK_KEY>` into the Fanmaker SDK initializer. You need to call this code in your `AppDelegate` class as part of your `application didFinishLaunchingWithOptions` callback function. Configuration is a little different depending on what "Life Cycle" are you using.
+To initialize the SDK, pass your `<SDK_KEY>` to the Fanmaker SDK initializer. Do this in
+your `AppDelegate`, in `application(_:didFinishLaunchingWithOptions:)`. The setup differs
+slightly depending on which app life cycle you use.
 
 #### For UIKit
 
-If you are using `UIKit` then you should already have and `AppDelegate` class living in `AppDelegate.swift`, so you just need to add Fanmaker SDK initialization code to that file under the right callback function:
+If you use `UIKit`, you already have an `AppDelegate` class in `AppDelegate.swift`. Add the
+Fanmaker SDK initialization to it:
 
-```
+```swift
 import UIKit
 import FanMaker
 
@@ -65,38 +136,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     static var fanmakerSDK1: FanMakerSDK!
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
-        . . .
+        // Your existing launch code
 
-        // FANMAKER SDK INITIALIZATION CODE
+        // Fanmaker SDK initialization code
         let fanmakerSDK1 = FanMakerSDK()
         fanmakerSDK1.initialize(apiKey: "<SDK_KEY>")
         AppDelegate.fanmakerSDK1 = fanmakerSDK1
 
-        . . .
-
         return true
     }
 
-    // MARK: UISceneSession Lifecycle
-
-    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-      . . .
-    }
-
-    func application(_ application: UIApplication, didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {
-      . . .
-    }
-
-
+    // Your existing UISceneSession lifecycle methods
 }
 ```
 
 #### For SwiftUI
 
-When using `SwiftUI` Life Cycle, no `AppDelegate` class is created automatically so you need to create one of your own:
+With the `SwiftUI` life cycle, no `AppDelegate` class is created for you, so create one:
 
-```
+```swift
 // AppDelegate.swift
 
 import SwiftUI
@@ -118,12 +176,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
 and then add the `AppDelegate` class to your `@main` file:
 
-```
+```swift
 // MyApp.swift
 
 import SwiftUI
 
- @main
+@main
 struct MyApp: App {
     // Include your AppDelegate class here
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -138,186 +196,284 @@ struct MyApp: App {
 
 ### Displaying Fanmaker UI
 
-In order to show Fanmaker UI in your app, create an instance of `FanMakerSDKWebViewController` (`UIViewController` subclass) and use it as you find convenient.
-
-Fanmaker SDK also provides a `FanMakerSDKWebViewControllerRepresentable` wrapper which complies with `UIViewControllerRepresentable` protocol. For example, the following code is used to show it as a sheet modal when users press a button (which we recomend):
-
-```
-import SwiftUI
-import FanMaker
-
-struct ContentView : View {
-    @State private var isShowingFanMakerUI : Bool = false
-
-    var body : some View {
-        Button("Show FanMaker UI", action: { isShowingFanMakerUI = true })
-            .sheet(isPresented: $isShowingFanMakerUI) {
-                // FanMakerUI Display
-                FanMakerSDKWebViewControllerRepresentable(sdk: AppDelegate.fanmakerSDK1)
-                Button("Hide FanMakerUI", action: { isShowingFanMakerUI = false })
-            }
-    }
-}
+```swift
+AppDelegate.fanmakerSDK1.present()
 ```
 
-### Handling SDK Close Actions
+The SDK finds the topmost view controller, presents the Fanmaker UI as a full-height sheet,
+and closes it again when the fan is done. You don't build a view controller, keep an
+`isShowing` flag in sync, or wire up dismissal.
 
-The Fanmaker SDK provides two ways to handle when the SDK UI is closed by the user:
+#### Presentation options
 
-#### Option 1: Closure-Based Callback (Single Listener)
+| Style | What the fan gets | When to use it |
+| --- | --- | --- |
+| `.sheet` **(default)** | Full-height sheet with a grabber. iOS supplies swipe-to-dismiss. | Almost always. The fan always has a way out, whatever the content does. |
+| `.fullScreen` | Edge to edge. The only way out is a close control drawn by the content itself. | Only where you know the content draws one, and never for a flow that can land on the login page. |
 
-For simple use cases where you only need one callback handler, you can use the `onClose` closure property:
+**Why `.sheet` is the default.** **Fanmaker's login page does not draw a close button.** A
+fan who opens the UI full screen and decides not to sign in has no way out. A sheet gives
+them one: iOS supplies the grabber and the swipe-down. The sheet uses a single full-height
+detent, so the content still gets almost the whole screen.
+
+**Choosing a style.** Pass one to the call, or set a default on the instance:
 
 ```swift
-import SwiftUI
+// Per call: wins over the instance setting
+AppDelegate.fanmakerSDK1.present(style: .fullScreen)
+
+// Per instance: used by every present() that doesn't pass a style
+AppDelegate.fanmakerSDK1.presentationStyle = .fullScreen
+AppDelegate.fanmakerSDK1.present()
+```
+
+The style passed to the call wins, then `presentationStyle` on the instance, then `.sheet`.
+
+On iOS 13 and 14 there are no sheet detents, so `.sheet` presents as a standard `.pageSheet`
+card. It can still be swiped away.
+
+#### Closing
+
+The SDK closes its own screen:
+
+- When the Fanmaker UI asks to close, the SDK closes the sheet and posts
+  `FanMakerSDK.closeSdk`.
+- When the fan swipes the sheet away, the SDK posts `FanMakerSDK.closeSdk` with
+  `params: ["source": "swipe"]` so you can still react. `onClose` is not called for a swipe.
+- If you set `onClose`, or register an `onAction("close")` handler, the SDK calls it instead
+  of closing the screen, and closing is up to you. See
+  [Handling SDK Close Actions](#handling-sdk-close-actions).
+
+#### More presentation calls
+
+- **`present(from:)`** presents from a view controller you name instead of the topmost one,
+  for an app with several scenes or one that wants the UI to come from a specific place in
+  its hierarchy. It takes the same `style:`, `animated:` and `completion:` arguments as
+  `present()`.
+- **`dismiss(animated:)`** closes a screen that `present()` put up, from your own code.
+- **`isPresenting`** is `true` while this instance has a screen on display.
+
+`present()` and `present(from:)` return `false` and show nothing when `initialize(apiKey:)`
+has not been called, when there is no visible view controller to present from (`present()`
+only), or when this
+instance already has a screen up. A second `present()` is refused rather than stacking a
+copy the fan then has to dismiss twice. You can ignore the return value.
+
+```swift
+import UIKit
 import FanMaker
 
-struct ContentView : View {
-    @State private var isShowingFanMakerUI : Bool = false
+class MyViewController: UIViewController {
+    func showFanmaker() {
+        AppDelegate.fanmakerSDK1.present(from: self, style: .sheet, animated: true) {
+            print("Fanmaker UI is on screen")
+        }
+    }
 
-    var body : some View {
-        Button("Show FanMaker UI", action: {
-            // Set up the close callback before showing the UI
-            AppDelegate.fanmakerSDK1.onClose = { params in
-                print("FanMaker SDK closed with params: \(params)")
-                // Handle the close action here
-                // For example, update UI state or perform cleanup
-                self.isShowingFanMakerUI = false
-            }
-
-            isShowingFanMakerUI = true
-        })
-        .sheet(isPresented: $isShowingFanMakerUI) {
-            FanMakerSDKWebViewControllerRepresentable(sdk: AppDelegate.fanmakerSDK1)
-            Button("Hide FanMakerUI", action: { isShowingFanMakerUI = false })
+    func hideFanmaker() {
+        if AppDelegate.fanmakerSDK1.isPresenting {
+            AppDelegate.fanmakerSDK1.dismiss(animated: true)
         }
     }
 }
 ```
 
-#### Option 2: NotificationCenter (Multiple Listeners)
+### Presenting it yourself (legacy)
 
-For more complex scenarios where multiple parts of your app need to respond to SDK close events, use NotificationCenter:
+> **Still supported, but no longer recommended.** New integrations should use
+> `sdk.present()`. Presenting the view controller yourself means handling presentation,
+> closing and dismissal in your own code. We expect to deprecate this path in a future
+> release, and will not remove it without notice and a migration path.
+
+Create a `FanMakerSDKWebViewController` (a `UIViewController` subclass) and present it as you
+see fit:
+
+- **UIKit apps**: create `FanMakerSDKWebViewController(sdk:)` and present it with UIKit's
+  `present(_:animated:)`.
+- **SwiftUI apps**: use `FanMakerSDKWebViewControllerRepresentable`, which conforms to
+  `UIViewControllerRepresentable`, inside `.sheet` or `.fullScreenCover`.
+
+> :warning: Do **not** wrap `FanMakerSDKWebViewControllerRepresentable` in a
+> `UIHostingController` to present it from a UIKit app. In that setup the controller may
+> never load, and a queued deep link is never used. UIKit apps should create
+> `FanMakerSDKWebViewController` directly, or use `sdk.present()`.
+
+#### UIKit
+
+```swift
+import UIKit
+import FanMaker
+
+class MyViewController: UIViewController {
+    @objc func showFanMakerUI() {
+        let fanMakerUI = FanMakerSDKWebViewController(sdk: AppDelegate.fanmakerSDK1)
+        present(fanMakerUI, animated: true)
+    }
+}
+```
+
+#### SwiftUI
 
 ```swift
 import SwiftUI
 import FanMaker
 
-class MyViewModel: ObservableObject {
-    @Published var fanMakerClosed = false
+struct ContentView : View {
+    @State private var isShowingFanMakerUI : Bool = false
+
+    var body : some View {
+        Button("Show Fanmaker UI") {
+            // Close the sheet through the binding, so SwiftUI knows it is gone
+            AppDelegate.fanmakerSDK1.onClose = { _ in isShowingFanMakerUI = false }
+            isShowingFanMakerUI = true
+        }
+        .sheet(isPresented: $isShowingFanMakerUI) {
+            FanMakerSDKWebViewControllerRepresentable(sdk: AppDelegate.fanmakerSDK1)
+        }
+    }
+}
+```
+
+When the Fanmaker UI asks to close and you have not set `onClose`, the SDK closes its own
+screen, whether you presented it, pushed it onto a navigation stack, or embedded it as a
+child view controller. If you wrote your own dismissal for this, you can delete it, or keep
+`onClose` set to stay in control.
+
+With SwiftUI's `.sheet(isPresented:)`, set `onClose` as in the sample above. If the SDK
+closes the sheet itself, your binding can stay `true`: SwiftUI still believes the sheet is
+up, and the next open does nothing.
+
+### Handling SDK Close Actions
+
+> **Optional.** The SDK closes its own screen, so you don't need to handle the close action
+> to give a fan a way out. Set `onClose` only to run your own logic on close, or to dismiss
+> a container of your own. Once it is set, the SDK no longer closes its own screen and leaves
+> that to you.
+
+When the Fanmaker UI asks to close, the SDK uses the first of these that applies:
+
+1. A handler you registered with `onAction("close")` (see
+   [Handling Arbitrary Actions](#handling-arbitrary-actions)).
+2. `onClose`, if set.
+3. Otherwise, it closes its own screen.
+
+Whichever one runs, the SDK then posts `FanMakerSDK.closeSdk`.
+
+#### Option 1: Closure-Based Callback (Single Listener)
+
+For a single handler, set the `onClose` closure property:
+
+```swift
+AppDelegate.fanmakerSDK1.onClose = { params in
+    print("Fanmaker closed with params: \(params)")
+    // With onClose set, the SDK leaves closing to you
+    AppDelegate.fanmakerSDK1.dismiss()
+}
+
+AppDelegate.fanmakerSDK1.present()
+```
+
+`onClose` is not called when the fan swipes the sheet away. Use the notification below to
+hear about both.
+
+#### Option 2: NotificationCenter (Multiple Listeners)
+
+When several parts of your app need to react to the SDK closing, observe the notification:
+
+```swift
+import Foundation
+import FanMaker
+
+class MyViewModel {
+    private var closeObserver: NSObjectProtocol?
 
     init() {
-        // Set up notification observer
-        NotificationCenter.default.addObserver(
+        closeObserver = NotificationCenter.default.addObserver(
             forName: FanMakerSDK.closeSdk,
             object: AppDelegate.fanmakerSDK1,
             queue: .main
-        ) { [weak self] notification in
+        ) { notification in
             if let params = notification.userInfo?["params"] as? [String: Any] {
-                print("FanMaker SDK closed with params: \(params)")
-                // Handle the close action
-                self?.fanMakerClosed = true
+                print("Fanmaker closed with params: \(params)")
             }
         }
     }
 
     deinit {
-        NotificationCenter.default.removeObserver(self)
+        if let closeObserver = closeObserver {
+            NotificationCenter.default.removeObserver(closeObserver)
+        }
     }
 }
 ```
 
-**Note**: The `params` dictionary contains any parameters passed from the web view when the close action is triggered.
+**Note**: `params` contains any parameters the Fanmaker UI passed with the close action.
+When the fan swiped a sheet opened with `present()` away, it is `["source": "swipe"]`.
 
 ### Handling Arbitrary Actions
 
-The Fanmaker SDK supports dynamic action handling, allowing you to respond to any action sent from the web view without requiring SDK updates. This enables the SDK to trigger custom behaviors in your application based on actions defined by Fanmaker dynamically.
+The Fanmaker UI can send named actions to your app, so Fanmaker can trigger behavior in your
+app without an SDK update.
 
 #### Option 1: Closure-Based Callback (Single Listener)
 
-Register handlers for specific actions using the `onAction(_:handler:)` method:
+Register a handler for an action with `onAction(_:handler:)`, for example right after
+`initialize(apiKey:)`:
 
 ```swift
-import SwiftUI
-import FanMaker
+AppDelegate.fanmakerSDK1.onAction("reload") { params in
+    print("Received reload action with params: \(params)")
+    if let force = params["force"] as? Bool, force {
+        // Reload your app's state
+    }
+}
 
-struct ContentView : View {
-    var body : some View {
-        // Register handler for "reload" action
-        AppDelegate.fanmakerSDK1.onAction("reload") { params in
-            print("Received reload action with params: \(params)")
-            // Handle reload logic here
-            if let force = params["force"] as? Bool, force {
-                // Force reload app state
-                reloadAppState()
-            }
-        }
-
-        // Register handler for "updateTheme" action
-        AppDelegate.fanmakerSDK1.onAction("updateTheme") { params in
-            if let theme = params["theme"] as? String {
-                // Update app theme
-                updateAppTheme(theme)
-            }
-        }
-
-        // Register handler for any custom action
-        AppDelegate.fanmakerSDK1.onAction("customAction") { params in
-            // Handle your custom action
-            handleCustomAction(params: params)
-        }
+AppDelegate.fanmakerSDK1.onAction("updateTheme") { params in
+    if let theme = params["theme"] as? String {
+        print("Switch the app theme to \(theme)")
     }
 }
 ```
 
+Registering a handler for an action replaces any earlier handler for that action. A handler
+for `close` replaces the SDK's own close handling, the same way `onClose` does.
+
 #### Option 2: NotificationCenter (Multiple Listeners)
 
-Listen for actions via NotificationCenter for scenarios where multiple parts of your app need to respond:
+Observe an action's notification when several parts of your app need to respond:
 
 ```swift
-import SwiftUI
+import Foundation
 import FanMaker
 
-class MyViewModel: ObservableObject {
+class MyViewModel {
+    private var reloadObserver: NSObjectProtocol?
+
     init() {
-        // Listen for "reload" action
-        NotificationCenter.default.addObserver(
+        reloadObserver = NotificationCenter.default.addObserver(
             forName: FanMakerSDK.actionNotificationName("reload"),
             object: AppDelegate.fanmakerSDK1,
             queue: .main
-        ) { [weak self] notification in
+        ) { notification in
             guard let params = notification.userInfo?["params"] as? [String: Any],
                   let action = notification.userInfo?["action"] as? String else {
                 return
             }
             print("Received \(action) action with params: \(params)")
-            // Handle reload action
-            self?.handleReloadAction(params: params)
-        }
-
-        // Listen for "updateTheme" action
-        NotificationCenter.default.addObserver(
-            forName: FanMakerSDK.actionNotificationName("updateTheme"),
-            object: AppDelegate.fanmakerSDK1,
-            queue: .main
-        ) { [weak self] notification in
-            guard let params = notification.userInfo?["params"] as? [String: Any] else {
-                return
-            }
-            // Handle theme update
-            self?.handleThemeUpdate(params: params)
         }
     }
 
     deinit {
-        NotificationCenter.default.removeObserver(self)
+        if let reloadObserver = reloadObserver {
+            NotificationCenter.default.removeObserver(reloadObserver)
+        }
     }
 }
 ```
 
 #### Option 3: SwiftUI View with `.onReceive()` Modifier
 
-For SwiftUI views, you can use the `.onReceive()` modifier to listen for actions directly in your view:
+In a SwiftUI view, you can listen for actions with the `.onReceive()` modifier:
 
 ```swift
 import SwiftUI
@@ -340,7 +496,6 @@ struct ContentView : View {
 
                 // Use specific parameters
                 if let success = params["success"] as? Bool {
-                    // Handle success parameter
                     print("Success: \(success)")
                 }
             }
@@ -361,361 +516,420 @@ AppDelegate.fanmakerSDK1.removeActionHandler("reload")
 #### How Actions Work
 
 The SDK will:
-1. Check for a registered handler via `onAction(_:handler:)`
+1. Check for a handler registered with `onAction(_:handler:)`
 2. Call the handler if one exists
 3. Post a notification with the action name (e.g., `FanMakerSDKAction_reload`)
 4. Include both `params` and `action` in the notification's `userInfo`
 
-**Note**: The `params` dictionary contains any parameters passed from the web view. Actions are handled dynamically, so you can add new actions without updating the SDK code.
+**Note**: `params` contains any parameters the Fanmaker UI passed with the action. Actions
+are handled dynamically, so Fanmaker can add new actions without an SDK update.
 
-#### Personalization options
+### Personalization Options
 
-When you present the `FanMakerSDKWebViewController` instance it will take a couple of seconds to load the content to display to the user. In the meanwhile, a system spinner will show to indicate the user the UI is actually loading. You can override this default spinner with a custom image or animation.
+While the Fanmaker UI loads, the SDK shows a loading screen with a system spinner. You can
+replace the spinner with your own image or animation. Call this before presenting the
+Fanmaker UI; right after `initialize(apiKey:)` is a good place:
 
-You can personalize the loading screen's loading animation by calling the following method before presenting the `FanMakerSDKWebViewController`. The prefered place to call this function is right after calling `AppDelegate.fanmakerSDK1.initialize`
-
-<!-- AppDelegate.fanmakerSDK1.setLoadingBackgroundColor(_ bgColor : UIColor) -->
+```swift
+AppDelegate.fanmakerSDK1.setLoadingForegroundImage(UIImage(named: "<YOUR IMAGE NAME>")!)
 ```
-AppDelegate.fanmakerSDK1.setLoadingForegroundImage(_ fgImage : UIImage)
-```
 
-**Note**: `AppDelegate.fanmakerSDK1.setLoadingForegroundImage(_ fgImage : UIImage)` can take both a static or an animated `UIImage` as an argument.
+`setLoadingForegroundImage(_:)` takes a static or an animated `UIImage`.
 
-The Sample App has a working example commented out in the `RegionList.swift` file, but here are some instructions to aid in creating a custom loading animation.
+The Sample App has a working example commented out in the `RegionList.swift` file. The
+steps below help you build a custom loading animation.
 
-**Note** Your images should be **square in dimension**, otherwise the SDK will force the dimensions into a square, potentially distoring your animation.
+**Note**: Your images should be **square**. Otherwise the SDK forces them into a square,
+which can distort your animation.
 
-You will need to break your gif into a PNG sequence, a still image for each "frame" of the animation. Once you have this sequence import all PNGs to the `Assets.xcassets` catalog of your iOS application.
+Break your gif into a PNG sequence, one still image for each frame of the animation, and
+import all the PNGs into the `Assets.xcassets` catalog of your iOS app.
 
 <img width="1160" alt="Screenshot 2023-10-12 at 4 51 37 PM" src="https://github.com/FanMaker/Turducken/assets/3985921/e121b16e-63f2-4a40-9109-eefd3aa83dab">
 
-Then you will need some code to create the animation from your static PNGS:
-```
+Then build the animation from the PNGs:
+
+```swift
 var images: [UIImage] = []
 
-// Start your sequence at 0 and end with the number of images you have.
+// Number your images <YOUR IMAGE NAME>-0, <YOUR IMAGE NAME>-1, and so on.
+// Start at 0 and end at the number of images you have.
 for index in 0...89 {
-    // We expect the images to be in the Assets.xcassets catelog. Number your images like so: `<YOUR IMAGE NAME>-0`
     if let image = UIImage(named: "<YOUR IMAGE NAME>-\(index)") {
         images.append(image)
     }
 }
 
-// Use `compactMap` to filter out any nil values from the array
-let nonNilImages = images.compactMap { $0 }
-
-// Check if there are any images before creating the animated image
-if !nonNilImages.isEmpty {
-    // You can adjust the duration to speed up or slow down your animation
-    let gifImage = UIImage.animatedImage(with: nonNilImages, duration: 1.0)
-
-    // Unwrap the optional before passing it to FanMakerSDK
-    if let unwrappedGifImage = gifImage {
-        // If all has gone well, we can now pass the animated image to FanMakerSDK
-        AppDelegate.fanmakerSDK1.setLoadingForegroundImage(unwrappedGifImage)
-    }
+// Adjust the duration to speed up or slow down your animation
+if let animation = UIImage.animatedImage(with: images, duration: 1.0) {
+    AppDelegate.fanmakerSDK1.setLoadingForegroundImage(animation)
 }
 ```
 
+### Links and Sign-ins Inside the SDK
+
+The SDK decides which links stay inside its webview and which open in the system browser.
+Nothing is required from your app.
+
+**Links to other sites.** When a fan taps a link on a Fanmaker page that leads outside your
+program's sites, the SDK opens it in the system browser. Partner and ticketing pages need
+their own browser controls and the fan's existing sessions, and have no way back when
+loaded inside the SDK.
+
+Only a tap, or a request for a new window, that replaces the whole Fanmaker page is sent
+out. Redirects, form posts and taps inside embedded frames stay in the webview. So do taps
+on a sign-in or payment provider's own pages, so those flows can finish and come back.
+Fanmaker's own hosts always stay in the webview. Until the SDK has learned your program's
+sites (the first time the Fanmaker UI loads on the device), nothing is sent out.
+
+`isExternalWebURL(_:)` is public if you want the same answer for a URL of your own.
+
+**Sign-ins that can't run in a webview.** Some sign-ins don't work in an embedded webview:
+Ticketmaster's passkeys only work on ticketmaster.com, and some identity providers refuse
+embedded webviews. For these, the Fanmaker page asks the SDK to run the sign-in in an
+`ASWebAuthenticationSession` sheet. The sheet uses a private browser session, so it neither
+uses nor changes the fan's own Safari sign-ins. Passkeys work there, and when the sign-in
+finishes the fan is back in the Fanmaker UI. Only Fanmaker's own pages can start one. Your
+app needs no change and registers nothing for this.
+
 ### Deep Linking / Universal Links
-If you wish to link to something within the Fanmaker SDK, you need to setup your application to accept URL Scheme or Universal Links, or know the resource you are trying to access.
 
-An example of using a URL scheme to open app links:
+To open a specific place in the Fanmaker UI from a link, a push notification or your own
+code, hand the destination to the SDK and then present it.
 
-<img width="1424" alt="Screenshot 2024-05-23 at 3 42 02 PM" src="https://github.com/FanMaker/Turducken/assets/3985921/071cecb0-7c32-4f5e-b2f5-669be6c62249">
+#### Accepting links in your app
 
-Navigate to your project's Info tab in Xcode and scroll down to URL Types and hit the (+) button. From there add the bundle identifier for your application (which can be located in the Signing & Capabilities tab), and add the URL Schemes you wish to use. No other setting should be necessary.
+To receive links, set up your app to accept a URL scheme or universal links. An example of
+using a URL scheme to open app links:
 
-From the example, you'll be able to open your application with your chosen URL Scheme, like `turducken://open`
+<img width="1424" alt="Screenshot 2024-05-23 at 3 42 02 PM" src="https://github.com/FanMaker/Turducken/assets/3985921/071cecb0-7c32-4f5e-b2f5-669be6c62249">
 
-Next you'll need to modify your application to be able to handle the link using `.onOpenURL`:
+In Xcode, open your project's Info tab, scroll down to URL Types and press the (+) button.
+Add your app's bundle identifier (from the Signing & Capabilities tab) and the URL schemes
+you want to use. No other setting is needed.
 
-```
+With the example above, your app opens for links like `turducken://open`.
+
+Then pass incoming URLs to the SDK, for example with `.onOpenURL`:
+
+```swift
 import SwiftUI
 import FanMaker
 
 struct ContentView : View {
-    @State private var isShowingFanMakerUI : Bool = false
-
     var body : some View {
-        Button("Show FanMaker UI", action: { isShowingFanMakerUI = true })
-        .sheet(isPresented: $isShowingFanMakerUI) {
-            // FanMakerUI Display
-            FanMakerSDKWebViewControllerRepresentable(sdk: AppDelegate.fanmakerSDK1)
-            Button("Hide FanMakerUI", action: { isShowingFanMakerUI = false })
-        }
-        .onOpenURL { url in
-            if AppDelegate.fanmakerSDK1.canHandleUrl(url) {
+        Text("My App")
+            .onOpenURL { url in
                 if AppDelegate.fanmakerSDK1.handleUrl(url) {
-                    print("FanMaker handled the URL, opening the FanMaker UI")
-                    self.isShowingFanMakerUI = true
-                } else {
-                    print("FanMaker failed to handle the URL")
+                    AppDelegate.fanmakerSDK1.present()
                 }
-
-            } else {
-                print("FanMaker cannot handle the URL")
+                // false: not a Fanmaker link, so handle it as your app normally would
             }
-        }
     }
 }
 ```
 
-In the example above the `.onOpenURL` method is used to catch the URL used to open the application and so it can be handeled accordingly. The Fanmaker SDK provides 2 methods for determining if a link can be handeled by Fanmaker:
-1) `AppDelegate.fanmakerSDK1.canHandleUrl(<URL>)`
-2) `AppDelegate.fanmakerSDK1.handleUrl(<URL>)`
+In UIKit, do the same wherever your app receives URLs, such as
+`scene(_:openURLContexts:)`. For a push notification, pass the destination URL from its
+payload the same way.
 
-**NOTE**: the `FanMakerSDK` expects links to start with `FanMaker` (case insensitive) after the schema used to open the applicaiton. Like so:
-```
-turducken://FanMaker/...(rest of path)
+#### Which links the SDK accepts
+
+`handleUrl(_:)` returns `true` and takes the destination when the URL is one of:
+
+- **Any scheme with the host `fanmaker`** (case-insensitive), for example
+  `turducken://fanmaker/store/items/1234`. Everything after the host is the destination.
+- **An `https://` link to a site Fanmaker has set up for your program**, such as a link in a
+  push notification. The SDK learns these sites from Fanmaker the first time the Fanmaker
+  UI loads on the device, and remembers them across launches. Until then, `handleUrl(_:)`
+  returns `false` for `https://` links; use the `fanmaker` form or `openPath(_:)`.
+
+The query string is kept: `turducken://fanmaker/store?utm_source=push` opens
+`/store?utm_source=push`. Any other URL returns `false`. `canHandleUrl(_:)` answers the same
+question without taking the destination; you don't need to call it before `handleUrl(_:)`.
+
+If the Fanmaker UI is on screen, `handleUrl(_:)` navigates it straight away. Otherwise the
+destination is used the next time the Fanmaker UI opens, once. If several links arrive
+before it opens, only the latest is used.
+
+Fanmaker can help you format links to sections of the Fanmaker UI.
+
+#### Opening a path directly
+
+When you already know a destination belongs to Fanmaker, for example a push payload that
+carries a bare path, use `openPath(_:)`. It needs no URL scheme or host:
+
+```swift
+if AppDelegate.fanmakerSDK1.openPath("/store/items/1234") {
+    AppDelegate.fanmakerSDK1.present()
+}
 ```
 
-So a link that might be used to open the prize store to a specific prize might look like this:
-```
-turducken://FanMaker/store/items/1234
-```
+`openPath(_:)` queues the path for the next time the Fanmaker UI opens; it does not
+navigate a Fanmaker screen that is already up. It returns `false` for an empty string or
+for anything with a scheme or host. Pass full URLs to `handleUrl(_:)`.
 
-The `AppDelegate.fanmakerSDK1.canHandleUrl(<URL>)` determines if the url can be used by the Fanmaker SDK, enforcing the `FanMaker` (case insensitive) prefix in the requested URL. Which will return a `Bool`
-The `AppDelegate.fanmakerSDK1.handleUrl(<URL>)` will setup the necessary connections within the `FanMakerSDK` so that when the WebView is next viewed, it will navigate to the appropriate place.
+#### Multiple `FanMakerSDK` instances
 
-**Note**: it is recommended that you trigger your sheet to display the `FanMakerUI` after a link has been handeled. On subsequent loads of the webview, the standard path will be used instead. Fanmaker can help you format your links to sections of the SDK approprately. When passing a deeplink/universal link to the Fanmaker SDK, this simply tells the SDK that when it is opened next to navigate to the desired route. If multiple links are passed without opening the SDK, then only the latest link will be shown to the user.
+If your app initializes more than one instance of the Fanmaker SDK, decide which instance a
+URL belongs to, for example by its scheme:
 
-**Multiple FanMakerSDK intances**:
-If your application initializes multiple instances of the Fanmaker SDK, you will be responsible for checking the scheme or web url to determine which instance to pass the url to:
-```
-@State private var isShowingFanMakerUI : Bool = false
-@State private var isShowingFanMakerUI2 : Bool = false
-...
-}.onOpenURL { url in
-    if AppDelegate.fanmakerSDK1.canHandleUrl(url) {
-        let url_components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        if url_components?.scheme == "turducken" {
-            if AppDelegate.fanmakerSDK1.handleUrl(url) {
-                print("FanMaker handled the URL, opening the FanMaker UI")
-                self.isShowingFanMakerUI = true
-            } else {
-                print("FanMaker failed to handle the URL")
+```swift
+import SwiftUI
+import FanMaker
+
+struct ContentView : View {
+    var body : some View {
+        Text("My App")
+            .onOpenURL { url in
+                let sdk: FanMakerSDK = url.scheme == "turducken2" ? AppDelegate.fanmakerSDK2 : AppDelegate.fanmakerSDK1
+                if sdk.handleUrl(url) {
+                    sdk.present()
+                }
             }
-        }
-
-        if url_components?.scheme == "turducken2" {
-            if AppDelegate.fanmakerSDK2.handleUrl(url) {
-                print("FanMaker2 handled the URL, opening the FanMaker2 UI")
-                self.isShowingFanMakerUI2 = true
-            } else {
-                print("FanMaker2 failed to handle the URL")
-            }
-        }
-
-    } else {
-        print("FanMaker cannot handle the URL")
     }
 }
 ```
 
 ### Passing Identifiers
 
-Fanmaker UI usually requires users to input their Fanmaker's Credentials. However, you can make use of up to four different custom identifiers to allow a given user to automatically login when they first open Fanmaker UI.
+The Fanmaker UI normally asks fans to sign in with their Fanmaker credentials. If your app
+already knows who the fan is, pass up to four identifiers so the fan is signed in
+automatically when the Fanmaker UI opens. Set them before calling `present()`:
 
-```
-import SwiftUI
-import FanMaker
+```swift
+// Which identifiers are available depends on your Fanmaker program.
+AppDelegate.fanmakerSDK1.setMemberID("<memberid>")
+AppDelegate.fanmakerSDK1.setStudentID("<studentid>")
+AppDelegate.fanmakerSDK1.setTicketmasterID("<ticketmasterid>")
+AppDelegate.fanmakerSDK1.setYinzid("<yinzid>")
 
-struct ContentView : View {
-    @State private var isShowingFanMakerUI : Bool = false
-
-    var body : some View {
-        // FanMakerUI initialization
-        let fanMakerUI = FanMakerSDKWebViewController(sdk: AppDelegate.fanmakerSDK1)
-
-        Button("Show FanMaker UI", action: {
-            // **Note**: Identifiers availability depends on your FanMaker program.
-            AppDelegate.fanmakerSDK1.setMemberID("<memberid>")
-            AppDelegate.fanmakerSDK1.setStudentID("<studentid>")
-            AppDelegate.fanmakerSDK1.setTicketmasterID("<ticketmasterid>")
-            AppDelegate.fanmakerSDK1.setYinzid("<yinzid>")
-
-            // Location Tracking is enabled by default in the FanMaker SDK. You can disable it by calling:
-            AppDelegate.fanmakerSDK1.disableLocationTracking()
-
-            // If your Host application disables location tracking, it will need to be manually enabled again before it can be used:
-            AppDelegate.fanmakerSDK1.enableLocationTracking()
-
-            // Make sure to setup any custom identifier before actually displaying the FanMaker UI
-            isShowingFanMakerUI = true
-        })
-            .sheet(isPresented: $isShowingFanMakerUI) {
-                // FanMakerUI Display
-                fanMakerUI.view
-                Button("Hide FanMakerUI", action: { isShowingFanMakerUI = false })
-            }
-    }
-}
+AppDelegate.fanmakerSDK1.present()
 ```
 
-**Note**: All of these identifiers, along with the Fanmaker's User ID, are automatically defined when a user successfully logins and become accessible via the following public variables:
+Identifiers are saved on the device and sent each time the Fanmaker UI opens, including
+after your app is relaunched, so you only need to set them again when they change. When the
+fan signs out of your app, call [`logout()`](#signing-a-fan-out).
 
-```
-AppDelegate.fanmakerSDK1.userID
-AppDelegate.fanmakerSDK1.memberID
-AppDelegate.fanmakerSDK1.studentID
-AppDelegate.fanmakerSDK1.ticketmasterID
-AppDelegate.fanmakerSDK1.yinzid
+**Note**: When a fan signs in through the Fanmaker UI, these identifiers and the fan's
+Fanmaker user ID are filled in automatically, and you can read them from these properties:
+
+```swift
+let userID = AppDelegate.fanmakerSDK1.userID
+let memberID = AppDelegate.fanmakerSDK1.memberID
+let studentID = AppDelegate.fanmakerSDK1.studentID
+let ticketmasterID = AppDelegate.fanmakerSDK1.ticketmasterID
+let yinzid = AppDelegate.fanmakerSDK1.yinzid
 ```
 
 ### Passing a Push Notification Token
-In addition to user identifiers, the Fanmaker SDK allows you to provide a Push Notification Token. This token enables Fanmaker to send push notifications directly to users of your application.
+You can also pass the fan's push notification token, so Fanmaker can send push
+notifications to users of your app.
 
-Once you’ve obtained a valid push notification token from APNs, pass it to the Fanmaker SDK before presenting the Fanmaker UI. The SDK will associate the token with the current user session.
+Once you have a valid push notification token from APNs, pass it to the Fanmaker SDK. Like
+identifiers, it is saved on the device and sent each time the Fanmaker UI opens.
 
-```
-import SwiftUI
-import FanMaker
-
-struct ContentView : View {
-    @State private var isShowingFanMakerUI : Bool = false
-
-    var body : some View {
-        // FanMakerUI initialization
-        let fanMakerUI = FanMakerSDKWebViewController(sdk: AppDelegate.fanmakerSDK1)
-
-        Button("Show FanMaker UI", action: {
-            AppDelegate.fanmakerSDK1.setPushNotificationToken("<pushToken>")
-            isShowingFanMakerUI = true
-        })
-            .sheet(isPresented: $isShowingFanMakerUI) {
-                fanMakerUI.view
-                Button("Hide FanMakerUI", action: { isShowingFanMakerUI = false })
-            }
-    }
-}
+```swift
+AppDelegate.fanmakerSDK1.setPushNotificationToken("<pushToken>")
 ```
 
 ### Passing Custom Identifiers
-It is also possible to pass arbitrary identifiers through the use of a dictionary. This would be done in the same place as you would pass a standard custom identifier above, so please reference that section for more details.
+You can also pass arbitrary identifiers as a dictionary. Set them the same way, and at the
+same time, as the identifiers above.
 
+```swift
+let arbitraryIdentifiers: [String: Any] = [
+    "nfl_oidc": "1234-nfl-oidc"
+]
+
+_ = AppDelegate.fanmakerSDK1.setFanMakerIdentifiers(dictionary: arbitraryIdentifiers)
 ```
-...
-Button("Show FanMaker UI", action: {
-    ...
-    AppDelegate.fanmakerSDK1.setMemberID("<memberid>")
 
-    let arbitraryIdentifiers: [String: Any] = [
-        "nfl_oidc": "1234-nfl-oidc"
-    ]
-
-    AppDelegate.fanmakerSDK1.setFanMakerIdentifiers(dictionary: arbitraryIdentifiers)
-
-    ...
-})
-...
-
-```
+New keys are merged into the ones already set, and saved on the device like the other
+identifiers. Use strings, numbers or booleans as values; other value types are not restored
+after a relaunch.
 
 ### Privacy Permissions (Optional)
-It is possible to pass optional privacy permission details to the Fanmaker SDK where we will record the settings for the user in our system. To pass this information to Fanmaker, please use the following protocols. Note: it is the same way you would pass Custom Identifiers above, but with specific keys.
+You can pass a fan's privacy settings to the Fanmaker SDK, and Fanmaker records them for the
+fan. Pass them the same way as Custom Identifiers above, with these keys:
 
-The specific privacy opt in/out keys are as follows:
 1. `privacy_advertising`
 2. `privacy_analytics`
 3. `privacy_functional`
 4. `privacy_all`
 
-*NOTE: all privacy permissions are optional. Do not pass privacy settings that you do not have user data for*
+`true` means the fan has opted in to that permission, and `false` means they have opted
+out.
 
-```
-...
-Button("Show FanMaker UI", action: {
-    ...
-    AppDelegate.fanmakerSDK1.setMemberID("<memberid>")
+*NOTE: all privacy permissions are optional. Do not pass privacy settings that you do not have user data for.*
 
-    let arbitraryIdentifiers: [String: Any] = [
-        # This is an example of a Custom Identifer you may pass
-        "nfl_oidc": "1234-nfl-oidc",
+```swift
+let arbitraryIdentifiers: [String: Any] = [
+    // An example of a custom identifier you may pass
+    "nfl_oidc": "1234-nfl-oidc",
 
-        # These are the opt in/out settings
-        "privacy_advertising": false,
-        "privacy_analytics": true,
-        "privacy_functional": true,
-        "privacy_all": false,
-    ]
+    // The opt in/out settings
+    "privacy_advertising": false,
+    "privacy_analytics": true,
+    "privacy_functional": true,
+    "privacy_all": false
+]
 
-    AppDelegate.fanmakerSDK1.setFanMakerIdentifiers(dictionary: arbitraryIdentifiers)
-
-    ...
-})
-...
-
+_ = AppDelegate.fanmakerSDK1.setFanMakerIdentifiers(dictionary: arbitraryIdentifiers)
 ```
 
 ### Passing Custom Parameters
-Similar to passing custom identifiers, you can also pass custom parameters to the SDK. Here is how to do so and some of the options.
+Like custom identifiers, you can pass custom parameters to the SDK. Here is how, with some
+of the options:
 
-```
-...
-Button("Show FanMaker UI", action: {
-    ...
-    AppDelegate.fanmakerSDK1.setMemberID("<memberid>")
+```swift
+let customParameters: [String: Any] = [
+    "hide_menu": true, // hides the menu in the SDK; pass false to show it again
+    "viewport_width": 512, // tells Fanmaker how wide the viewing area is
+    "viewport_height": 1024 // tells Fanmaker how tall the viewing area is
+]
 
-    let customParameters: [String: Any] = [
-        "hide_menu": true, // used to hide the menu in the SDK. Note, you will need to pass hide_menu: false, when you want to show the menu again.
-        "viewport_width": 512, // used to inform FanMaker how wide the viewing area is
-        "viewport_height": 1024 // used to inform FanMaker how tall the viewing area is
-    ]
-
-    AppDelegate.fanmakerSDK1.fanMakerParameters(dictionary: customParameters)
-
-    ...
-})
-...
-
+_ = AppDelegate.fanmakerSDK1.fanMakerParameters(dictionary: customParameters)
 ```
 
-*`Note`: a value of `true` indicates that the user has opted in to a privacy permission, `false` indicates that a user has opted out.*
+Unlike identifiers, parameters are not saved on the device. Set them again after each
+launch.
+
+### Signing a Fan Out
+
+When a fan signs out of your app, call `logout()`:
+
+```swift
+AppDelegate.fanmakerSDK1.logout()
+```
+
+**When to call it:** every time a fan signs out of your app, including when one fan signs
+out so another can sign in on the same device. Identifiers and the Fanmaker session survive
+app restarts, so without `logout()` the next person to open the Fanmaker UI on that device
+is signed in as the previous fan.
+
+**When you don't need to:** when a fan logs out *inside* the Fanmaker UI, the SDK ends the
+Fanmaker session itself.
+
+**Switching fans:** call `logout()` when the first fan signs out, and set the next fan's
+identifiers only once they have signed in to your app. Don't rely on new identifiers
+replacing the old fan on their own: if the new fan has no Fanmaker account yet, the previous
+fan's session would still be there.
+
+`logout()` clears, in memory and on the device, every identifier (including custom
+identifiers and the push notification token) and the fan's Fanmaker session token. It also
+clears the cookies and stored website data of the SDK's web view, so neither Fanmaker's pages
+nor a sign-in provider such as Ticketmaster can sign the next person in as the previous fan. It
+does not close a Fanmaker screen that is on display, and does not clear custom parameters.
+
+On iOS 17 and later the SDK's web view keeps its website data in a store of its own, so
+`logout()` never touches your app's own web views. Before iOS 17 every `WKWebView` in an app
+shares one store, so `logout()` clears only the data for Fanmaker's own sites there. To act
+once everything is cleared, pass a completion, which runs on the main thread:
+
+```swift
+AppDelegate.fanmakerSDK1.logout {
+    // the Fanmaker session and all web data are gone
+}
+```
+
+Use `logout()` for sign-out, not `clearIdentifiers()`. The session, not the identifiers, is
+what keeps a fan signed in to Fanmaker, so clearing only the identifiers leaves the next
+person to open the Fanmaker UI signed in as the previous fan. Two narrower calls are
+available:
+
+- `clearIdentifiers()` clears the identifiers and keeps the session.
+- `clearSessionToken()` clears the session and keeps the identifiers, so the next open signs
+  the same fan in again from them.
 
 ### Location Tracking
 
-Fanmaker UI asks for user's permission to track their location the first time it loads. By default the Fanmaker SDK will have location tracking enabled for features like Auto Checkin. However, location tracking can be enabled/disabled by calling the following static functions:
+The Fanmaker UI asks for the fan's permission to use their location the first time it
+loads. Location tracking is on by default in the Fanmaker SDK, for features like Auto
+Checkin. To turn it off, or back on:
 
-```
-// To manually disable location tracking
+```swift
+// To turn location tracking off
 AppDelegate.fanmakerSDK1.disableLocationTracking()
 
-// To manually enable location tracking back
+// To turn location tracking back on
 AppDelegate.fanmakerSDK1.enableLocationTracking()
 ```
 
+The setting is not saved, and `initialize(apiKey:)` turns tracking back on. To keep it off,
+call `disableLocationTracking()` after `initialize(apiKey:)` on every launch. It does not
+affect beacon scanning; see [Beacons Tracking](#beacons-tracking).
+
 ### Auto Checkin
-The FanMakerSDK can auto checkin users to events without them opening the FanMakerSDK itself. Once the user has successfully logged into the FanMakerSDK and granted location permissions, on subsequent opens of your application, the FanmakerSDK will automatically attempt to automatically checkin the user to events within range. Location Tracking is enabled by default in the Fanmaker SDK, if you have disabled it with `AppDelegate.fanmakerSDK1.disableLocationTracking()` you can enable it again with:
-```
+The Fanmaker SDK can check fans in to events without them opening the Fanmaker UI. Once a
+fan has signed in through the Fanmaker UI and granted location permission, the SDK tries to
+check them in to events in range each time your app launches or returns to the foreground.
+Location tracking is on by default. If you turned it off with
+`AppDelegate.fanmakerSDK1.disableLocationTracking()`, turn it back on with:
+
+```swift
 AppDelegate.fanmakerSDK1.enableLocationTracking()
 ```
 
 ### Beacons Tracking
 
-The FanMakerSDK allows beacon tracking by implementing the protocol `FanMakerSDKBeaconsManagerDelegate`. This protocol can be implemented in a `UIViewController` subclass (for classic development using a storyboard) class as well as an `ObservableObject` (for SwiftUI development).
+The Fanmaker SDK tracks beacons through a `FanMakerSDKBeaconsManager` and a delegate that
+implements `FanMakerSDKBeaconsManagerDelegate`. Any `NSObject` subclass can be the delegate,
+such as a view controller or a view model.
 
-Then, you need to declare an instance of `FanMakerSDKBeaconsManager` and assign your delegate to it.
+The delegate is required: the region list only reaches your app through it, and your app
+starts scanning from it. The sequence is:
 
-```
+1. Once the fan has signed in to Fanmaker, call `requestAuthorization()`.
+2. When `didChangeAuthorization` reports `.authorizedAlways` or `.authorizedWhenInUse`, call
+   `fetchBeaconRegions()`.
+3. When `didReceiveBeaconRegions` delivers the regions, call `startScanning(_:)` with them.
+
+```swift
+import FanMaker
+
 class FanMakerViewModel : NSObject, FanMakerSDKBeaconsManagerDelegate {
     private let beaconsManager1 : FanMakerSDKBeaconsManager
 
-    init() {
+    override init() {
         beaconsManager1 = FanMakerSDKBeaconsManager(sdk: AppDelegate.fanmakerSDK1)
 
         super.init()
         beaconsManager1.delegate = self
     }
+
+    // Call once the fan has signed in to Fanmaker
+    func startBeacons() {
+        beaconsManager1.requestAuthorization()
+    }
+
+    func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didChangeAuthorization status: FanMakerSDKBeaconsAuthorizationStatus) {
+        if status == .authorizedAlways || status == .authorizedWhenInUse {
+            manager.fetchBeaconRegions()
+        }
+    }
+
+    func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didReceiveBeaconRegions regions: [FanMakerSDKBeaconRegion]) {
+        manager.startScanning(regions)
+    }
+
+    func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didEnterRegion region: FanMakerSDKBeaconRegion) {}
+    func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didExitRegion region: FanMakerSDKBeaconRegion) {}
+    func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didUpdateBeaconRangeActionsHistory queue: [FanMakerSDKBeaconRangeAction]) {}
+    func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didUpdateBeaconRangeActionsSendList queue: [FanMakerSDKBeaconRangeAction]) {}
+    func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didFailWithError error: FanMakerSDKBeaconsError) {}
 }
 ```
 
-`FanMakerSDKBeaconsManagerDelegate` protocol requires the following functions to be implemented:
+Keep a strong reference to both the beacons manager and your delegate for as long as you
+want to track beacons. The manager holds its delegate weakly.
+
+`FanMakerSDKBeaconsManagerDelegate` requires the following functions:
 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didChangeAuthorization status: FanMakerSDKBeaconsAuthorizationStatus) -> Void
 ```
-This function is used to handle the current `FanMakerSDKBeaconsAuthorizationStatus` of your app. The possible enum values are:
+Reports your app's current `FanMakerSDKBeaconsAuthorizationStatus`. The possible values are:
 ```
 .notDetermined
 .restricted
@@ -723,52 +937,65 @@ This function is used to handle the current `FanMakerSDKBeaconsAuthorizationStat
 .authorizedAlways
 .authorizedWhenInUse
 ```
-Calling `beaconsManager1.requestAuthorization()` will prompt the user to get permissions when necessary and call this function when user gives or denies permission to use iOS Location tracking.
+Calling `beaconsManager1.requestAuthorization()` asks the fan for location permission when
+needed, and this function is called when the fan grants or denies it.
 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didReceiveBeaconRegions regions: [FanMakerSDKBeaconRegion]) -> Void
 ```
-In order to actually start tracking beacons, you need to call `beaconsManager1.fetchBeaconRegions()`. Be sure you have the right permissions before calling this or it won't work. Once beacons are retrieved from Fanmaker servers, `didReceiveBeacons` will be called.
+Called with your program's beacon regions after you call `beaconsManager1.fetchBeaconRegions()`.
+Call `manager.startScanning(regions)` here; tracking starts only then. Make sure you have
+location permission before fetching, or scanning won't work.
 
-**NOTE**: In order to fetch beacons from the API and start tracking them, user needs to be logged into the Fanmaker UI before calling this function.
-
+**NOTE**: The fan must be signed in to the Fanmaker UI before you call
+`fetchBeaconRegions()`. Otherwise `didFailWithError` is called with `.userSessionNotFound`.
 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didEnterRegion region: FanMakerSDKBeaconRegion) -> Void
 ```
-This function will get called whenever a user walks into a scanned beacon region.
+Called when the fan walks into a scanned beacon region, or is already inside one when
+scanning starts, once Fanmaker has recorded the entry.
 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didExitRegion region: FanMakerSDKBeaconRegion) -> Void
 ```
-This function will get called whenever a user walks out of a scanned beacon region.
+Called when the fan walks out of a scanned beacon region, once Fanmaker has recorded the
+exit.
 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didUpdateBeaconRangeActionsHistory queue: [FanMakerSDKBeaconRangeAction]) -> Void
 ```
-This function will get called whenever a user gets a valid beacon signal, which happens approximately once per minute while the user stays in a beacon's range. The time interval is customizable via the API
+Called when the fan gets a valid beacon signal, which happens about once per minute while
+the fan stays in a beacon's range. Fanmaker sets the interval for your program.
 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didUpdateBeaconRangeActionsSendList queue: [FanMakerSDKBeaconRangeAction]) -> Void
 ```
-This function will get called whenever a valid beacon signal fails to get posted to the Fanmaker servers. This may happen because of weak or failing internet connection, temporarily server errors, etc. The SDK will retry to send this queue every minute and, once it get posted successfully, this queue will be emptied and this function will be called with an empty array.
+Called when valid beacon signals could not be sent to Fanmaker, for example because of a
+weak connection or a temporary server error. The SDK retries every minute. Once they are
+sent, the queue is emptied and this function is called with an empty array.
 
 ```
 func beaconsManager(_ manager: FanMakerSDKBeaconsManager, didFailWithError error: FanMakerSDKBeaconsError) -> Void
 ```
-This function will be called whenever something goes wrong.
-Possible enum values for `FanMakerSDKBeaconsError` are:
+Called when something goes wrong. The possible `FanMakerSDKBeaconsError` values are:
 ```
 .userSessionNotFound
 .serverError
 .unknown
 ```
 
-**Multiple FanMakerSDK intances**:
-When you have multiple instances of the FanMakerSDK initialized, you can scan for beacons with one, the other, or all of them.
+To stop monitoring beacon regions, call `beaconsManager1.stopScanning()`. Beacon scanning needs the fan's
+location permission, which `requestAuthorization()` asks for. `disableLocationTracking()`
+does not stop beacon scanning.
 
-Make sure to initialize a beacons manager for each instance:
-```
+**Multiple `FanMakerSDK` instances**:
+When you have more than one instance of the Fanmaker SDK initialized, you can scan for
+beacons with one, the other, or all of them.
+
+Create a beacons manager for each instance:
+
+```swift
 private let beaconsManager1 : FanMakerSDKBeaconsManager
 private let beaconsManager2 : FanMakerSDKBeaconsManager
 
@@ -782,35 +1009,58 @@ override init() {
 }
 ```
 
-You'll then want to request authorization with all instances:
-```
+Then request authorization with each of them:
+
+```swift
 beaconsManager1.requestAuthorization()
 beaconsManager2.requestAuthorization()
 ```
 
-The FanMakerSDK has location tracking on by default. Location tracking in needed to scan for bluetooth beacons. Here is how you can enable or disable location tracking to block or allow scanning for bluetooth beacons
+The delegate functions pass the `manager` they come from, so `manager.fetchBeaconRegions()`
+and `manager.startScanning(regions)` work for every instance.
 
-To Disable location tracking:
+#### Checking your beacon setup
+
+Every stage of beacon tracking writes an `NSLog` line starting with `FanMaker (Beacons):`,
+so you can check your setup from Xcode's console or `Console.app`. Filter on that prefix and
+you should see, in order:
+
 ```
-AppDelegate.fanmakerSDK1.disableLocationTracking()
-AppDelegate.fanmakerSDK2.disableLocationTracking()
+FanMaker (Beacons): Monitoring for beacon region UUID: E2C56DB5-… Major: 1
+FanMaker (Beacons): Already inside FanMaker beacon region at scan start: e2c56db5-…::1
+FanMaker (Beacons): ENTER region 12 'North Gate' (UUID: e2c56db5-… Major 1) via didDetermineState
+FanMaker (Beacons): RANGING STARTED for region 12 'North Gate' (…). Beacon sightings will be logged as they arrive.
+FanMaker (Beacons): RANGED beacon E2C56DB5-… major 1 minor 0 [rssi -72, proximity near, accuracy 1.4] - recording
+FanMaker (Beacons): ENTER recorded for region 12 'North Gate'
+FanMaker (Beacons): 1 beacon range actions successfully posted
 ```
 
-To Enable location tracking:
-```
-AppDelegate.fanmakerSDK1.enableLocationTracking()
-AppDelegate.fanmakerSDK2.enableLocationTracking()
-```
+A fan who walks into the region after scanning starts gets `via didEnterRegion` instead,
+without the `Already inside` line.
 
-### Recomended Entitlements
+The first missing line usually tells you where the problem is:
+
+| You see | Meaning |
+| --- | --- |
+| No `Monitoring for beacon region` lines | `startScanning(_:)` was never called. Check that location permission was granted, that `fetchBeaconRegions()` ran after the fan signed in, and that your `didReceiveBeaconRegions` calls `manager.startScanning(regions)`. |
+| `Monitoring…` but no `ENTER` | The device is not inside any configured region. Check the UUID and major against the regions set up for your program. |
+| `ENTER` but no `RANGING STARTED` | The region has no major value, so the SDK can't range it. |
+| `RANGING STARTED` but no `RANGED` | The device is listening and hearing nothing. Usually the beacon is off, out of range, or advertising a different UUID. |
+| `RANGED … holding off until the 60s uniqueness throttle clears` | Working as intended. The beacon is being seen, and repeat sightings are held back for the interval Fanmaker set for your program. Each beacon logs its first sighting regardless, so you always get confirmation. |
+| `RANGED … recording` but no `beacon range actions successfully posted` | Sightings are being captured but not reaching Fanmaker. Check connectivity and that the fan is still signed in. |
+
+Once a region is entered, ranging runs whether or not the request to Fanmaker succeeds, and
+stops when the region is exited.
+
+### Recommended Info.plist Entries
 
 Bluetooth (required for beacons)
 ```
 <key>NSBluetoothAlwaysUsageDescription</key>
-<string>Enabling blutooth access will allow you to earn points when you come in contact with bluetooth beacons that may be located at the location of an event you are attending. You may also receive exclusive offers and additional point earning opportunities based on your contact with bluetooth beacons always</string>
+<string>Enabling Bluetooth access will allow you to earn points when you come in contact with Bluetooth beacons that may be located at the location of an event you are attending. You may also receive exclusive offers and additional point earning opportunities based on your contact with Bluetooth beacons always</string>
 
 <key>NSBluetoothPeripheralUsageDescription</key>
-<string>Enabling blutooth access will allow you to earn points when you come in contact with bluetooth beacons that may be located at the location of an event you are attending. You may also receive exclusive offers and additional point earning opportunities based on your contact with bluetooth beacons</string>
+<string>Enabling Bluetooth access will allow you to earn points when you come in contact with Bluetooth beacons that may be located at the location of an event you are attending. You may also receive exclusive offers and additional point earning opportunities based on your contact with Bluetooth beacons</string>
 ```
 
 Location (required)
@@ -819,7 +1069,7 @@ Location (required)
 <string>By sharing your location you can automatically earn points for checking in to certain events. You may also receive exclusive offers and additional point earning opportunities based on your location</string>
 
 <key>NSLocationAlwaysUsageDescription</key>
-<string>By sharing your location you can automatically earn points for checking in to certain events. You may also receive exclusive offers and additional point earning opportunities based on your location or when you come in contact with bluetooth beacons</string>
+<string>By sharing your location you can automatically earn points for checking in to certain events. You may also receive exclusive offers and additional point earning opportunities based on your location or when you come in contact with Bluetooth beacons</string>
 
 <key>NSLocationUsageDescription</key>
 <string>By sharing your location you can earn points for checking in to certain events. You may also receive exclusive offers and additional point earning opportunities based on your location</string>
@@ -827,8 +1077,13 @@ Location (required)
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>By sharing your location you can earn points for checking in to certain events. You may also receive exclusive offers and additional point earning opportunities based on your location</string>
 ```
+
 ## :warning: BREAKING CHANGES IN 2.0 :warning:
-Version 2.0 of the FanMakerSDK has changed from static to instanced based initializtion. This means that you will need to modify your implementation to avoid service interruptions in this version. Previous versions of the SDK are no longer available for instalation. Support for SDK versions 1.x will be depreciated on December 20th, 2024, afterwords non version 2.0 + will cease to function.
+Version 2.0 of the Fanmaker SDK changed from static to instance-based initialization. This
+means that you will need to modify your implementation to avoid service interruptions in
+this version. Previous versions of the SDK are no longer available for installation.
+Support for SDK versions 1.x will be deprecated on December 20th, 2024; after that, versions
+before 2.0 will cease to function.
 
 The benefits of SDK 2.0 are [described in detail on our blog](https://blog.fanmaker.com/sdk-2-0-background-check-ins-app-rewards-and-support-for-multiple-programs/).
 
@@ -840,19 +1095,21 @@ Previously the Fanmaker SDK was initialized like this:
 FanMakerSDK.initialize(apiKey: "<SDK_KEY>")
 ```
 
-Now, with the instanced based initialization, you'll need to keep track of the instance of the SDK like so:
+Now, with instance-based initialization, you need to keep track of the instance of the SDK:
 
-```
+```swift
 let fanmakerSDK1 = FanMakerSDK()
 fanmakerSDK1.initialize(apiKey: "<SDK_KEY_1>")
 AppDelegate.fanmakerSDK1 = fanmakerSDK1
 ```
 
-This way you can initialize multiple, independent versions of the Fanmaker SDK. Using the `AppDelegate` allows the SDK impementation to be available throughout your application.
+This way you can initialize multiple, independent instances of the Fanmaker SDK. Keeping
+the instance on the `AppDelegate` makes it available throughout your app.
 
 
 ### Step 2:
-When you are preparing your sheet to present the `FanMakerSDKWebViewConrollerRepresentable`, you will now also need to pass the SDK instance you initialized in Step 1.
+When you prepare your sheet to present `FanMakerSDKWebViewControllerRepresentable`, you now
+also need to pass the SDK instance you initialized in Step 1.
 ```
 ...
 }.sheet(isPresented: $showFanMakerUI) {
@@ -861,22 +1118,26 @@ When you are preparing your sheet to present the `FanMakerSDKWebViewConrollerRep
 ```
 
 ### Step 3:
-If you are passing any values to the FanMakerSDK using one of our methods like `setMemberID`, `setTicketmasterID`, or `setFanMakerIdentifiers`, then be sure to specify which SDK instance you are passing the values to:
+If you pass any values to the Fanmaker SDK using methods like `setMemberID`,
+`setTicketmasterID`, or `setFanMakerIdentifiers`, specify which SDK instance you are passing
+the values to:
 
-```
+```swift
 AppDelegate.fanmakerSDK1.setMemberID("123456")
 AppDelegate.fanmakerSDK1.setTicketmasterID("7890123")
 
 let fanmakerIdentifiers1: [String: Any] = [
     "airship_channel_id": "7870978-airship-a0af9d780a9s7f07f"
 ]
-AppDelegate.fanmakerSDK1.setFanMakerIdentifiers(dictionary: fanmakerIdentifiers1)
+_ = AppDelegate.fanmakerSDK1.setFanMakerIdentifiers(dictionary: fanmakerIdentifiers1)
 ```
 
 ### Step 4:
-If you are using bluetooth beacons through the Fanmaker SDK, you will need to update your implementation.
+If you use Bluetooth beacons through the Fanmaker SDK, you need to update your
+implementation.
 
-Where you are initializing the `FanMakerSDKBeaconsManager`, you will now need to pass the instance of the SDK you are using:
+Where you initialize the `FanMakerSDKBeaconsManager`, you now need to pass the instance of
+the SDK you are using:
 ```
 beaconsManager1 = FanMakerSDKBeaconsManager(sdk: AppDelegate.fanmakerSDK1)
 ```
@@ -885,7 +1146,8 @@ Then set the delegate as normal:
 beaconsManager1.delegate = self
 ```
 
-You will need to requestAuthorization for every instance of the SDK you are planning on using beacons with:
+You need to call `requestAuthorization()` for every instance of the SDK you plan to use
+beacons with:
 ```
 beaconsManager1.requestAuthorization()
 ```
