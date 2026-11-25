@@ -378,11 +378,13 @@ open class FanMakerSDKBeaconsManager : NSObject, CLLocationManagerDelegate {
             return
         }
 
-        // An exit we were never inside for is not worth posting, and would
-        // otherwise let a stray exit produce an unpaired action.
-        guard forgetInside(region.identifier) else {
-            log("Exit for a region we were not inside; ignoring: \(region.identifier)")
-            return
+        // Always handled, as in 4.0: iOS reports an exit only for a real
+        // crossing out. Our in-memory "inside" set is empty after a relaunch (iOS
+        // relaunches the app for region events, routinely mid-visit) and after a
+        // failed enter POST; refusing those exits dropped the exit row and left
+        // ranging running for the rest of the session.
+        if !forgetInside(region.identifier) {
+            log("Exit for a region not recorded as entered this launch (relaunch or failed enter); handling it anyway: \(region.identifier)")
         }
 
         log("EXIT region \(fmRegion.id) '\(fmRegion.name)' (\(fmRegion))")

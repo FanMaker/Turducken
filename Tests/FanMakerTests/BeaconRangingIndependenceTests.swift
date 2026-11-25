@@ -111,13 +111,16 @@ final class BeaconRangingIndependenceTests: XCTestCase {
                        "moving ranging earlier must not defeat the de-duplication guard")
     }
 
-    func testAnExitWeWereNeverInsideForDoesNotStopRanging() {
+    // Changed on purpose (4.1.0 review): after a relaunch mid-visit, or a
+    // failed enter POST, the in-memory "inside" set is empty, and refusing the
+    // exit left ranging running and the exit unrecorded.
+    func testAnExitStillStopsRangingWhenTheEnterWasNotRecordedThisLaunch() {
         let subject = subjectScanningOurRegion()
         let spy = RangingSpy()
 
         subject.locationManager(spy, didExitRegion: ourRegion())
 
-        XCTAssertTrue(spy.stopped.isEmpty)
+        XCTAssertEqual(spy.stopped.count, 1)
     }
 
     // MARK: - The sighting log integrators read

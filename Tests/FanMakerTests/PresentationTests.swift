@@ -113,6 +113,19 @@ final class PresentationTests: XCTestCase {
 
     // MARK: - present()
 
+    // 4.1.0 review: the page's close action self-dismisses only a screen
+    // present() put up. A host that presents the controller itself closes it
+    // from the closeSdk notification; a second dismiss went one screen too far.
+    func testOnlyAScreenPresentPutUpClosesItself() {
+        let hostOwned = screen()
+        XCTAssertFalse(sdk.didPresent(hostOwned), "a screen the host built and placed is the host's to close")
+
+        XCTAssertTrue(sdk.present(from: window.rootViewController!, animated: false))
+        let sdkOwned = window.rootViewController?.presentedViewController as! FanMakerSDKWebViewController
+        XCTAssertTrue(sdk.didPresent(sdkOwned))
+        XCTAssertFalse(sdk.didPresent(hostOwned))
+    }
+
     func testPresentPutsAScreenUpWithNoHostWiring() {
         XCTAssertFalse(sdk.isPresenting)
 

@@ -257,9 +257,13 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
                             // nothing on iOS dismissed anything - every
                             // integration had to wire that up itself, and the
                             // ones that did not left fans stuck on the page.
+                            // Only a screen present() put up: a host that shows
+                            // the SDK itself (4.0, README "Option 2") closes it
+                            // from the closeSdk notification below, and a second
+                            // dismiss here unwound one screen too far.
                             if let onClose = self.sdk.onClose {
                                 onClose(params)
-                            } else {
+                            } else if self.sdk.didPresent(self) {
                                 self.dismissSelf()
                             }
                         }

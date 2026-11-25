@@ -341,20 +341,22 @@ public class FanMakerSDK {
         self.locationEnabled = true // As of 2.0.3, we are making location enabled by default to help some clients with location tracking setup
         self.userDefaults = FanMakerSDKUserDefaults(sdk: self)
 
-        // Identifiers are restored whether or not a session token is present.
+        // Stored identifiers come back only alongside a live session token, as
+        // in 4.0. Restoring them unconditionally signed the PREVIOUS fan back in
+        // on a shared device: a host built against 4.0 has no logout(), so its
+        // sign-out was "stop setting identifiers", and the restored ones were
+        // then posted to /site/auth/auto_login on the next open.
         //
-        // They used to be restored only alongside a live token, which had it
-        // backwards: identifiers are the *input* to authentication, not a
-        // product of it. loginUserFromParams posts them to
-        // /site/auth/auto_login and FanMakerSDKWebView calls it on every open,
-        // so gating them on an existing token suppressed the exact flow that
-        // obtains one - a returning fan whose token had gone could not be
-        // auto-logged in from identifiers already sitting on the device.
-        //
-        // Ending a session is now an explicit act: see logout().
+        // What comes back is only a fallback: the first identifier the host sets
+        // this launch drops all of them (see adoptHostIdentifiers), so a new
+        // fan's member ID is never sent alongside the last fan's other IDs.
         let defaults = self.userDefaults
-        if let json = defaults?.string(forKey: self.FanMakerSDKJSONIdentifiers), !json.isEmpty {
+        if let token = defaults?.string(forKey: self.FanMakerSDKSessionToken), !token.isEmpty,
+           let json = defaults?.string(forKey: self.FanMakerSDKJSONIdentifiers), !json.isEmpty {
+            self.isRestoringIdentifiers = true
             self.setIdentifiers(fromJSON: json)
+            self.isRestoringIdentifiers = false
+            self.holdsRestoredIdentifiers = true
         }
 
         // Restore the persisted first-party host allowlist so a cold-start push
@@ -522,36 +524,44 @@ public class FanMakerSDK {
     }
 
     public func setUserID(_ value : String) {
+        adoptHostIdentifiers()
         self.userID = value
         persistIdentifiers()
     }
 
     public func setMemberID(_ value : String) {
+        adoptHostIdentifiers()
         self.memberID = value
         persistIdentifiers()
     }
 
     public func setStudentID(_ value : String) {
+        adoptHostIdentifiers()
         self.studentID = value
         persistIdentifiers()
     }
 
     public func setTicketmasterID(_ value : String) {
+        adoptHostIdentifiers()
         self.ticketmasterID = value
         persistIdentifiers()
     }
 
     public func setYinzid(_ value : String) {
+        adoptHostIdentifiers()
         self.yinzid = value
         persistIdentifiers()
     }
 
     public func setPushNotificationToken(_ value : String) {
+        // The device's token, not the fan's identity: it doesn't replace the
+        // restored identifiers.
         self.pushToken = value
         persistIdentifiers()
     }
 
     public func setFanMakerIdentifiers(dictionary: [String: Any] = [:]) -> [String: Any] {
+        adoptHostIdentifiers()
         var idLexicon = (self.fanmakerIdentifierLexicon as? [String: Any]) ?? [:]
 
         for key in dictionary.keys {
@@ -728,6 +738,14 @@ public class FanMakerSDK {
     /// screen the host tore down itself cannot keep this instance believing it
     /// is still showing something.
     private weak var presentedScreen: FanMakerSDKWebViewController?
+
+    /// Whether `screen` is the one present() put up. Only that screen closes
+    /// itself on the page's close action with no onClose set: a host that shows
+    /// the SDK its own way (4.0) closes it from the closeSdk notification, and a
+    /// second dismiss from the SDK took that host one screen too far.
+    func didPresent(_ screen: FanMakerSDKWebViewController) -> Bool {
+        return presentedScreen === screen
+    }
 
     /// How `present()` puts the FanMaker UI on screen when no style is passed
     /// to the call itself.
@@ -933,6 +951,26 @@ public class FanMakerSDK {
     /// Identifiers supplied by a host used to be memory-only: only the ones
     /// arriving from the web bridge were persisted, so a host that set them
     /// once at login silently stopped sending them from the next cold start.
+    /// True while initialize() replays the stored identifiers.
+    private var isRestoringIdentifiers = false
+    /// True while the identifiers in memory are the ones restored at launch and
+    /// nobody has set one since.
+    private var holdsRestoredIdentifiers = false
+
+    /// Called by every identifier setter. The first host (or web bridge) value
+    /// this launch replaces the restored set as a whole: the restored IDs may
+    /// belong to whoever used the device last.
+    private func adoptHostIdentifiers() {
+        guard holdsRestoredIdentifiers, !isRestoringIdentifiers else { return }
+        holdsRestoredIdentifiers = false
+        self.userID = ""
+        self.memberID = ""
+        self.studentID = ""
+        self.ticketmasterID = ""
+        self.yinzid = ""
+        self.fanmakerIdentifierLexicon = [:]
+    }
+
     private func persistIdentifiers() {
         guard let defaults = self.userDefaults else { return }
 
