@@ -40,6 +40,17 @@ final class AuthSessionRequestTests: XCTestCase {
         XCTAssertEqual(request(["url": tmStart, "callbackScheme": "Oilers"], from: "www.loiltyrewards.com")?.callbackScheme, "oilers")
     }
 
+    // FanMaker/NUX#1023: SeatGeek asks for the shared session; everything else
+    // stays private, including a "shared" that isn't a plain true.
+    func testASessionIsPrivateUnlessThePageAsksForAShared() {
+        let sgStart = "https://seatgeek.fanmaker.com/seatgeek_oidc/start/mnwild?sdk_platform=ios"
+        XCTAssertEqual(request(["url": sgStart, "callbackScheme": "yc-wild", "shared": true], from: "www.loiltyrewards.com"),
+                       .init(url: URL(string: sgStart)!, callbackScheme: "yc-wild", shared: true))
+        XCTAssertEqual(request(["url": tmStart, "callbackScheme": "oilers"], from: "www.loiltyrewards.com")?.shared, false)
+        XCTAssertEqual(request(["url": tmStart, "callbackScheme": "oilers", "shared": "true"], from: "www.loiltyrewards.com")?.shared, false)
+        XCTAssertEqual(request(["url": tmStart, "callbackScheme": "oilers", "shared": false], from: "www.loiltyrewards.com")?.shared, false)
+    }
+
     func testAMalformedMessageIsRefused() {
         XCTAssertNil(request(tmStart, from: "www.loiltyrewards.com"))
         XCTAssertNil(request(["url": tmStart], from: "www.loiltyrewards.com"))
