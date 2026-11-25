@@ -589,7 +589,11 @@ Ticketmaster's passkeys only work on ticketmaster.com, and some identity provide
 embedded webviews. For these, the Fanmaker page asks the SDK to run the sign-in in an
 `ASWebAuthenticationSession` sheet. The sheet uses a private browser session, so it neither
 uses nor changes the fan's own Safari sign-ins. Passkeys work there, and when the sign-in
-finishes the fan is back in the Fanmaker UI. Only Fanmaker's own pages can start one. Your
+finishes the fan is back in the Fanmaker UI.
+
+SeatGeek sign-ins are the exception: they use the shared Safari session, so a fan your app
+already signed in to SeatGeek through the system browser is signed in to Fanmaker with that
+same account, without signing in again. iOS asks the fan once to allow the sign-in. Only Fanmaker's own pages can start one. Your
 app needs no change and registers nothing for this.
 
 ### Deep Linking / Universal Links

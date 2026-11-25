@@ -207,6 +207,12 @@ public class FanMakerSDK {
     struct AuthSessionRequest: Equatable {
         let url: URL
         let callbackScheme: String
+        /// Run in the fan's shared browser session instead of a private one,
+        /// when the page asks with `"shared": true`. For a provider the host
+        /// app already signs the fan in to through the system browser (SeatGeek):
+        /// the shared session already holds that sign-in, so the fan is not
+        /// asked again and cannot pick another account. FanMaker/NUX#1023.
+        var shared: Bool = false
     }
 
     /// The sign-in an `authSession` message asks for, or nil when it has to be
@@ -224,7 +230,7 @@ public class FanMakerSDK {
               scheme.range(of: "^[a-z][a-z0-9+.-]*$", options: .regularExpression) != nil,
               !["http", "https", "javascript", "data", "file", "about"].contains(scheme)
         else { return nil }
-        return AuthSessionRequest(url: url, callbackScheme: scheme)
+        return AuthSessionRequest(url: url, callbackScheme: scheme, shared: body["shared"] as? Bool == true)
     }
 
     /// A fanmaker.com host, the site's own host or one it allows. Fails closed.
