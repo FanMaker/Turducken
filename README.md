@@ -18,17 +18,15 @@ Do these when you upgrade:
 
 1. **Call `logout()` when a fan signs out of your app.** Identifiers you set
    (`setMemberID`, `setFanMakerIdentifiers` and the rest) are now saved on the device and
-   sent again after a relaunch, so restarting the app no longer forgets them. `logout()`
-   also clears the SDK web view's cookies and stored website data, and leaves your own web
-   views alone. See [Signing a Fan Out](#signing-a-fan-out).
-2. **Check how you close the Fanmaker UI.** When the Fanmaker UI asks to close and you have
-   not set `onClose`, the SDK now closes its own screen.
-   - If you set `onClose` only to dismiss the screen, you can remove it.
-   - If you dismiss the screen from a `FanMakerSDK.closeSdk` observer, remove that
-     dismissal, or move it into `onClose` so the SDK leaves closing to you.
-   - If you show the UI with SwiftUI's `.sheet(isPresented:)` and have no `onClose`, your
-     binding can stay `true` after the SDK closes the sheet, which blocks the next open.
-     Set `onClose` to reset it, or switch to `present()`.
+   restored after a relaunch while the fan still has a Fanmaker session. The first
+   identifier you set in a launch replaces the restored ones, so a new fan never carries
+   the last fan's IDs (a push token doesn't count). `logout()` also clears the SDK web
+   view's cookies and stored website data, and leaves your own web views alone. See
+   [Signing a Fan Out](#signing-a-fan-out).
+2. **Closing is unchanged unless you switch to `present()`.** When the Fanmaker UI asks to
+   close and you have not set `onClose`, the SDK closes a screen that `present()` put up.
+   A screen you present, push or embed yourself is still yours to close, from `onClose` or
+   a `FanMakerSDK.closeSdk` observer, as in 4.0.
 
    See [Handling SDK Close Actions](#handling-sdk-close-actions).
 
@@ -334,28 +332,23 @@ struct ContentView : View {
 }
 ```
 
-When the Fanmaker UI asks to close and you have not set `onClose`, the SDK closes its own
-screen, whether you presented it, pushed it onto a navigation stack, or embedded it as a
-child view controller. If you wrote your own dismissal for this, you can delete it, or keep
-`onClose` set to stay in control.
-
-With SwiftUI's `.sheet(isPresented:)`, set `onClose` as in the sample above. If the SDK
-closes the sheet itself, your binding can stay `true`: SwiftUI still believes the sheet is
-up, and the next open does nothing.
+A screen you present, push or embed yourself is yours to close: the SDK only closes a
+screen that `present()` put up. With SwiftUI's `.sheet(isPresented:)`, set `onClose` as in
+the sample above to reset your binding.
 
 ### Handling SDK Close Actions
 
-> **Optional.** The SDK closes its own screen, so you don't need to handle the close action
-> to give a fan a way out. Set `onClose` only to run your own logic on close, or to dismiss
-> a container of your own. Once it is set, the SDK no longer closes its own screen and leaves
-> that to you.
+> **Optional with `present()`.** The SDK closes a screen that `present()` put up, so you
+> don't need to handle the close action to give a fan a way out. Set `onClose` only to run
+> your own logic on close. Once it is set, the SDK leaves closing to you. A screen you show
+> yourself always needs `onClose` or a `FanMakerSDK.closeSdk` observer to close.
 
 When the Fanmaker UI asks to close, the SDK uses the first of these that applies:
 
 1. A handler you registered with `onAction("close")` (see
    [Handling Arbitrary Actions](#handling-arbitrary-actions)).
 2. `onClose`, if set.
-3. Otherwise, it closes its own screen.
+3. Otherwise, it closes its own screen, if `present()` put it up.
 
 Whichever one runs, the SDK then posts `FanMakerSDK.closeSdk`.
 

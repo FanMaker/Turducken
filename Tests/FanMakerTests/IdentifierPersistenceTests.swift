@@ -34,6 +34,7 @@ final class IdentifierPersistenceTests: XCTestCase {
         first.setYinzid("fan-a-yinz")
         first.setPushNotificationToken("fan-a-push")
         _ = first.setFanMakerIdentifiers(dictionary: ["seat": "12F"])
+        first.updateSessionToken("fan-a-session-token")
 
         let next = relaunch()
         XCTAssertEqual(next.memberID, "fan-a-member")
@@ -42,18 +43,34 @@ final class IdentifierPersistenceTests: XCTestCase {
         XCTAssertEqual(next.fanmakerIdentifierLexicon["seat"] as? String, "12F")
     }
 
-    func testIdentifiersComeBackWithoutASessionToken() {
-        // The behaviour that changed. Identifiers are the input to auto-login -
-        // loginUserFromParams posts them to /site/auth/auto_login - so
-        // restoring them only when a token already existed suppressed the very
-        // flow that obtains one.
+    // Changed on purpose (4.1.0 review): restoring without a token signed the
+    // previous fan back in on hosts built against 4.0, which have no logout().
+    func testIdentifiersStayOnDiskWithoutASessionToken() {
         let first = relaunch()
-        first.setMemberID("returning-fan")
+        first.setMemberID("fan-a-member")
         XCTAssertNil(first.sessionToken, "no session token in this scenario")
 
         let next = relaunch()
-        XCTAssertEqual(next.memberID, "returning-fan",
-                       "a returning fan with no token still needs their identifiers to auto-login")
+        XCTAssertTrue(next.memberID.isEmpty,
+                      "with no session, the last fan's identifiers must not be posted to auto_login")
+    }
+
+    func testTheHostsFirstIdentifierReplacesTheRestoredOnes() {
+        let first = relaunch()
+        first.setMemberID("fan-a-member")
+        first.setTicketmasterID("fan-a-tm")
+        _ = first.setFanMakerIdentifiers(dictionary: ["seat": "12F"])
+        first.updateSessionToken("fan-a-session-token")
+
+        let next = relaunch()
+        next.setPushNotificationToken("device-push")
+        XCTAssertEqual(next.memberID, "fan-a-member", "a push token is the device's, not a new fan")
+
+        next.setMemberID("fan-b-member")
+        XCTAssertEqual(next.memberID, "fan-b-member")
+        XCTAssertTrue(next.ticketmasterID.isEmpty, "fan A's Ticketmaster ID must not ride along with fan B")
+        XCTAssertTrue(next.fanmakerIdentifierLexicon.isEmpty)
+        XCTAssertEqual(next.pushToken, "device-push")
     }
 
     func testLogoutForgetsTheFanEntirely() {
@@ -107,6 +124,7 @@ final class IdentifierPersistenceTests: XCTestCase {
     func testAValueSetThisLaunchWinsOverAStoredOne() {
         let first = relaunch()
         first.setMemberID("stored-member")
+        first.updateSessionToken("fan-session-token")
 
         let next = relaunch()
         next.setMemberID("fresh-member")
