@@ -439,7 +439,10 @@ extension FanMakerSDKWebViewController {
             return
         }
         guard authSession == nil else {
+            // Answer, so the page resets its button instead of waiting forever.
+            // "cancelled" leaves the open sign-in alone (the page does nothing).
             NSLog("FanMaker ignored an authSession request: one is already open")
+            reportAuthSession("cancelled")
             return
         }
 
