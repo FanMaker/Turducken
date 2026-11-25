@@ -564,13 +564,13 @@ if let animation = UIImage.animatedImage(with: images, duration: 1.0) {
 The SDK decides which links stay inside its webview and which open in the system browser.
 Nothing is required from your app.
 
-**Links to other sites.** When a fan taps a link on a Fanmaker page that leads outside your
-program's sites, the SDK opens it in the system browser. Partner and ticketing pages need
-their own browser controls and the fan's existing sessions, and have no way back when
-loaded inside the SDK.
+**Links to other sites.** When a Fanmaker page opens a link outside your program's sites in
+a new window (`target="_blank"` or `window.open`), the SDK opens it in the system browser.
+Before 4.1.0 those links did nothing.
 
-Only a tap, or a request for a new window, that replaces the whole Fanmaker page is sent
-out. Redirects, form posts and taps inside embedded frames stay in the webview. So do taps
+A link that opens in the same window stays in the webview, as before, so store checkouts and
+partner pages that Fanmaker opens in place keep the fan's session. Redirects, form posts and
+taps inside embedded frames stay in the webview too. So do taps
 on a sign-in or payment provider's own pages, so those flows can finish and come back.
 Fanmaker's own hosts always stay in the webview. Until the SDK has learned your program's
 sites (the first time the Fanmaker UI loads on the device), nothing is sent out.
@@ -821,7 +821,10 @@ does not close a Fanmaker screen that is on display, and does not clear custom p
 
 On iOS 17 and later the SDK's web view keeps its website data in a store of its own, so
 `logout()` never touches your app's own web views. Before iOS 17 every `WKWebView` in an app
-shares one store, so `logout()` clears only the data for Fanmaker's own sites there. To act
+shares one store, so `logout()` clears only Fanmaker's own data there: everything for
+fanmaker.com, and for your program's site only the cookies set on its exact host. The
+site's stored page data is cleared by the Fanmaker page itself the next time it opens.
+Your app's own cookies on a parent domain (for example `.wild.com`) are left alone. To act
 once everything is cleared, pass a completion, which runs on the main thread:
 
 ```swift

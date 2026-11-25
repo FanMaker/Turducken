@@ -181,6 +181,16 @@ public class FanMakerSDK {
     /// A tap on a page we don't own stays put. SSO and checkout put the webview
     /// on a provider's pages mid-flow, and that provider's own links have to
     /// work in place.
+    /// Whether the webview hands a navigation to the system browser: only a
+    /// request for a new window (`target="_blank"`, `window.open`) that leaves
+    /// first-party hosts. 4.0 had no handler for those, so they did nothing;
+    /// Safari is strictly better. A same-window tap stays in the webview, as in
+    /// 4.0: store checkouts, ticketing and sponsor pages that NUX opens in
+    /// place keep the fan's in-app session and come back.
+    static func ejectsToBrowser(opensANewWindow: Bool, offFirstParty: Bool) -> Bool {
+        return opensANewWindow && offFirstParty
+    }
+
     func shouldOpenInBrowser(_ url: URL, from source: URL?) -> Bool {
         guard let source = source, !isExternalWebURL(source) else { return false }
         return isExternalWebURL(url)
@@ -1029,9 +1039,26 @@ public class FanMakerSDK {
             if #available(iOS 17.0, *) {
                 store.removeData(ofTypes: types, modifiedSince: .distantPast, completionHandler: done)
             } else {
+                // One store for every web view in the app. WebKit groups data by
+                // registrable domain, and a program's site often sits on the
+                // client's own domain (rewards.wild.com is "wild.com"), so
+                // removing that whole record signed the fan out of the host
+                // app's own web views. Whole records only for fanmaker.com;
+                // elsewhere, cookies set for our exact hosts, and the page's
+                // web storage from inside our own page on its next load.
+                self.clearsWebStorageOnNextLoad = true
                 store.fetchDataRecords(ofTypes: types) { records in
-                    let ours = records.filter { FanMakerSDK.isOwnWebDataRecord($0.displayName, ownHosts: ownHosts) }
-                    store.removeData(ofTypes: types, for: ours, completionHandler: done)
+                    let ours = records.filter { FanMakerSDK.isOwnWebDataRecord($0.displayName, ownHosts: []) }
+                    store.removeData(ofTypes: types, for: ours) {
+                        store.httpCookieStore.getAllCookies { cookies in
+                            let group = DispatchGroup()
+                            for cookie in cookies where FanMakerSDK.isOwnCookieDomain(cookie.domain, ownHosts: ownHosts) {
+                                group.enter()
+                                store.httpCookieStore.delete(cookie) { group.leave() }
+                            }
+                            group.notify(queue: .main, execute: done)
+                        }
+                    }
                 }
             }
         }
@@ -1048,6 +1075,23 @@ public class FanMakerSDK {
         if #available(iOS 17.0, *) { return WKWebsiteDataStore(forIdentifier: webDataStoreID) }
         return .default()
     }()
+
+    /// Whether a cookie's domain is exactly one of our hosts (or fanmaker.com),
+    /// never a parent domain another site on the client's domain shares.
+    static func isOwnCookieDomain(_ domain: String, ownHosts: [String]) -> Bool {
+        var name = domain.lowercased()
+        if name.hasPrefix(".") { name.removeFirst() }
+        if name == "fanmaker.com" || name.hasSuffix(".fanmaker.com") { return true }
+        return ownHosts.contains { $0.lowercased() == name }
+    }
+
+    /// Set by logout() before iOS 17: the next Fanmaker page that loads clears
+    /// its own localStorage and sessionStorage, which WebKit can't remove per
+    /// host from outside. Persisted, so it survives a restart before that load.
+    var clearsWebStorageOnNextLoad: Bool {
+        get { (userDefaults?.value(forKey: "FanMakerSDKClearWebStorage") as? Bool) ?? false }
+        set { userDefaults?.set(newValue, forKey: "FanMakerSDKClearWebStorage") }
+    }
 
     /// Whether a website data record (WebKit names one by its registrable
     /// domain, e.g. "fanmaker.com") belongs to one of our own hosts.
