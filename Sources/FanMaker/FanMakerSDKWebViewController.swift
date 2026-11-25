@@ -85,6 +85,17 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation) {
         self.view = self.fanmaker!.webView
+
+        // After a logout() before iOS 17: clear the page's own web storage, the
+        // one piece WebKit can't remove per host from outside, then reload so
+        // the page starts signed out. Only on one of our hosts.
+        if self.sdk.clearsWebStorageOnNextLoad, !self.sdk.isExternalWebURL(webView.url ?? URL(string: "about:blank")!),
+           let scheme = webView.url?.scheme, scheme == "https" {
+            self.sdk.clearsWebStorageOnNextLoad = false
+            webView.evaluateJavaScript("try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}") { _, _ in
+                webView.reload()
+            }
+        }
     }
 
     /// Sends links that leave first-party territory to the system browser
@@ -98,10 +109,10 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
     ///
     /// Deliberately narrow about what counts, because SSO and checkout run
     /// *through* third-party pages and have to come back:
-    /// - only a tap, or a request for a new window - never a redirect or a
-    ///   form post;
-    /// - only one that replaces the whole page - a tap inside an embedded
-    ///   frame navigates that frame, not the fan away from us;
+    /// - only a request for a new window (`target="_blank"`, `window.open`),
+    ///   which 4.0 silently dropped. A same-window tap stays in the webview as
+    ///   in 4.0: store checkouts, ticketing and sponsor pages NUX opens in
+    ///   place keep the fan's in-app session. Never a redirect or a form post;
     /// - only from one of our own pages - once SSO has put the webview on the
     ///   provider's login page, that page's own links ("forgot password") have
     ///   to work in place, or the fan is handed a browser mid-sign-in.
@@ -118,11 +129,9 @@ open class FanMakerSDKWebViewController : UIViewController, WKScriptMessageHandl
         }
 
         let opensANewWindow = navigationAction.targetFrame == nil
-        let fanTappedIt = navigationAction.navigationType == .linkActivated
-            && navigationAction.targetFrame?.isMainFrame == true
 
-        guard fanTappedIt || opensANewWindow,
-              self.sdk.shouldOpenInBrowser(url, from: webView.url) else {
+        guard FanMakerSDK.ejectsToBrowser(opensANewWindow: opensANewWindow,
+                                          offFirstParty: self.sdk.shouldOpenInBrowser(url, from: webView.url)) else {
             decisionHandler(.allow)
             return
         }
